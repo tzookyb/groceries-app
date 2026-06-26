@@ -487,12 +487,12 @@
 <div class="panel active" id="panel-list">
   <div class="add-row">
     <input type="text" id="newItem" placeholder="הוסף מוצר..." onkeydown="if(event.key==='Enter')addItem()">
-    <button class="btn btn-accent" onclick="addItem()">הוסף</button>
-    <button class="btn btn-ghost" onclick="toggleVoiceAdd()" id="voiceAddBtn" title="הוסף בקול">🎙️</button>
+    <button class="btn btn-accent" onclick="addItem()" style="white-space:nowrap">הוסף</button>
+    <button class="btn btn-ghost" onclick="toggleVoiceAdd()" id="voiceAddBtn" style="white-space:nowrap; padding:12px 14px;">🎙️</button>
   </div>
 
   <!-- Voice add mode banner -->
-  <div id="voiceAddBanner" style="display:none; background:var(--surface); border:1.5px solid var(--accent); border-radius:12px; padding:14px 16px; display:none; flex-direction:column; gap:8px;">
+  <div id="voiceAddBanner" style="display:none; background:var(--surface); border:1.5px solid var(--accent); border-radius:12px; padding:14px 16px; flex-direction:column; gap:8px;">
     <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--accent); font-weight:600;">
       <div class="pulse-dot"></div>
       מצב הוספה קולית פעיל
