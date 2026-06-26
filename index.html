@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>רשימת קניות קולית</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="קניות">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;800&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #222535;
+    --accent: #4ade80;
+    --accent-dim: rgba(74,222,128,0.12);
+    --red: #f87171;
+    --red-dim: rgba(248,113,113,0.12);
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --border: #2d3145;
+    --radius: 16px;
+  }
+
+  body {
+    font-family: 'Heebo', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  header {
+    width: 100%;
+    padding: 24px 32px 0;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+
+  .logo {
+    width: 40px; height: 40px;
+    background: var(--accent);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+
+  h1 {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+
+  h1 span { color: var(--accent); }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 4px;
+    margin: 28px auto 0;
+    width: calc(100% - 40px);
+    max-width: 640px;
+  }
+
+  .tab {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: 'Heebo', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .tab.active {
+    background: var(--surface2);
+    color: var(--text);
+  }
+
+  .panel {
+    display: none;
+    width: calc(100% - 40px);
+    max-width: 640px;
+    margin: 20px auto;
+    flex: 1;
+  }
+
+  .panel.active { display: flex; flex-direction: column; gap: 12px; }
+
+  /* ── Master list ── */
+  .add-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  input[type="text"] {
+    flex: 1;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    font-family: 'Heebo', sans-serif;
+    font-size: 15px;
+    padding: 12px 16px;
+    outline: none;
+    transition: border-color 0.2s;
+    direction: rtl;
+  }
+
+  input[type="text"]:focus { border-color: var(--accent); }
+
+  .btn {
+    border: none;
+    border-radius: 12px;
+    font-family: 'Heebo', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    padding: 12px 18px;
+  }
+
+  .btn-accent {
+    background: var(--accent);
+    color: #0f1117;
+  }
+
+  .btn-accent:hover { filter: brightness(1.1); }
+
+  .btn-ghost {
+    background: var(--surface);
+    color: var(--muted);
+    border: 1.5px solid var(--border);
+  }
+
+  .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+
+  .item-list { display: flex; flex-direction: column; gap: 6px; }
+
+  .item-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    transition: border-color 0.15s;
+  }
+
+  .item-row:hover { border-color: var(--accent); }
+
+  .drag-handle {
+    color: var(--muted);
+    cursor: grab;
+    font-size: 18px;
+    line-height: 1;
+    user-select: none;
+  }
+
+  .item-name { flex: 1; font-size: 15px; }
+
+  .item-category {
+    font-size: 12px;
+    color: var(--muted);
+    background: var(--surface2);
+    border-radius: 6px;
+    padding: 2px 8px;
+  }
+
+  .btn-del {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px;
+    border-radius: 6px;
+    transition: color 0.15s;
+    line-height: 1;
+  }
+
+  .btn-del:hover { color: var(--red); }
+
+  .empty-state {
+    text-align: center;
+    color: var(--muted);
+    padding: 48px 20px;
+    font-size: 14px;
+    line-height: 1.8;
+  }
+
+  /* ── Session ── */
+  .session-idle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    padding: 40px 0;
+  }
+
+  .big-mic {
+    width: 120px; height: 120px;
+    border-radius: 50%;
+    background: var(--accent-dim);
+    border: 2px solid var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+
+  .big-mic:hover { transform: scale(1.05); box-shadow: 0 0 32px rgba(74,222,128,0.25); }
+
+  .session-hint {
+    font-size: 14px;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.7;
+  }
+
+  .session-active {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .progress-bar-wrap {
+    width: 100%;
+    height: 4px;
+    background: var(--surface);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 4px;
+    transition: width 0.3s;
+  }
+
+  .progress-label {
+    font-size: 12px;
+    color: var(--muted);
+    align-self: flex-end;
+  }
+
+  .current-item-card {
+    width: 100%;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px 24px;
+    text-align: center;
+  }
+
+  .current-item-label { font-size: 12px; color: var(--muted); margin-bottom: 12px; letter-spacing: 1px; text-transform: uppercase; }
+
+  .current-item-name {
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    line-height: 1.1;
+  }
+
+  .listening-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--accent);
+    margin-top: 16px;
+    justify-content: center;
+  }
+
+  .pulse-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.7); }
+  }
+
+  .voice-answer {
+    font-size: 13px;
+    color: var(--muted);
+    min-height: 20px;
+    transition: color 0.2s;
+  }
+
+  .voice-answer.yes { color: var(--accent); }
+  .voice-answer.no { color: var(--red); }
+
+  .session-controls {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .btn-yes {
+    flex: 1;
+    background: var(--accent-dim);
+    color: var(--accent);
+    border: 1.5px solid var(--accent);
+    border-radius: 12px;
+    font-family: 'Heebo', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    padding: 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .btn-yes:hover { background: rgba(74,222,128,0.25); }
+
+  .btn-no {
+    flex: 1;
+    background: var(--red-dim);
+    color: var(--red);
+    border: 1.5px solid var(--red);
+    border-radius: 12px;
+    font-family: 'Heebo', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    padding: 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .btn-no:hover { background: rgba(248,113,113,0.25); }
+
+  .selected-preview {
+    width: 100%;
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 1.5px solid var(--border);
+    padding: 16px;
+  }
+
+  .selected-preview h3 { font-size: 12px; color: var(--muted); letter-spacing: 1px; margin-bottom: 10px; }
+
+  .selected-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .chip {
+    background: var(--accent-dim);
+    color: var(--accent);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  /* ── Results ── */
+  .result-screen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 20px 0;
+  }
+
+  .result-icon {
+    font-size: 56px;
+  }
+
+  .result-title { font-size: 22px; font-weight: 800; }
+
+  .result-list {
+    width: 100%;
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 1.5px solid var(--border);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .result-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 15px;
+  }
+
+  .result-item::before {
+    content: '✓';
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .auth-section {
+    width: 100%;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .auth-section p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+  .status-msg {
+    font-size: 13px;
+    color: var(--muted);
+    text-align: center;
+    min-height: 20px;
+  }
+
+  .status-msg.ok { color: var(--accent); }
+  .status-msg.err { color: var(--red); }
+
+  /* Google auth button */
+  .btn-google {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: #fff;
+    color: #333;
+    border: none;
+    border-radius: 12px;
+    font-family: 'Heebo', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 12px 20px;
+    cursor: pointer;
+    transition: filter 0.15s;
+    width: 100%;
+  }
+
+  .btn-google:hover { filter: brightness(0.95); }
+
+  .google-icon {
+    width: 20px; height: 20px;
+  }
+
+  .skip-to-top { padding-bottom: 40px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🛒</div>
+  <h1>רשימת <span>קניות</span> קולית</h1>
+</header>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('list')">רשימת מלאי</button>
+  <button class="tab" onclick="switchTab('session')">סשן קניות</button>
+</div>
+
+<!-- ── TAB: Master List ── -->
+<div class="panel active" id="panel-list">
+  <div class="add-row">
+    <input type="text" id="newItem" placeholder="הוסף מוצר..." onkeydown="if(event.key==='Enter')addItem()">
+    <button class="btn btn-accent" onclick="addItem()">הוסף</button>
+  </div>
+  <div class="item-list" id="itemList"></div>
+  <div class="empty-state" id="emptyState">
+    עדיין אין מוצרים ברשימה.<br>הוסף מוצרים שתמיד יש לך בבית.
+  </div>
+</div>
+
+<!-- ── TAB: Session ── -->
+<div class="panel" id="panel-session">
+
+  <!-- Idle -->
+  <div class="session-idle" id="sessionIdle">
+    <div class="big-mic" onclick="startSession()">🎙️</div>
+    <div class="session-hint">
+      לחץ להתחיל.<br>
+      האפליקציה תקרא כל מוצר — ענה <strong>כן</strong> או <strong>לא</strong>.
+    </div>
+    <!-- Google Tasks auth -->
+    <div class="auth-section">
+      <p>כדי לשמור לרשימת Google Tasks, יש להתחבר עם Google:</p>
+      <button class="btn-google" onclick="connectGoogle()">
+        <svg class="google-icon" viewBox="0 0 48 48"><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="#FBBC05" d="M10.53 28.59c-.5-1.45-.79-3-.79-4.59s.29-3.14.79-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/></svg>
+        התחבר עם Google
+      </button>
+      <div class="status-msg" id="authStatus"></div>
+    </div>
+  </div>
+
+  <!-- Active session -->
+  <div class="session-active" id="sessionActive">
+    <div class="progress-bar-wrap" style="width:100%">
+      <div class="progress-bar" id="progressBar" style="width:0%"></div>
+    </div>
+    <div class="progress-label" id="progressLabel">0 / 0</div>
+
+    <div class="current-item-card">
+      <div class="current-item-label">האם צריך?</div>
+      <div class="current-item-name" id="currentItemName">—</div>
+      <div class="listening-indicator">
+        <div class="pulse-dot"></div>
+        מאזין...
+      </div>
+      <div class="voice-answer" id="voiceAnswer"></div>
+    </div>
+
+    <div class="session-controls">
+      <button class="btn-yes" onclick="answer(true)">כן ✓</button>
+      <button class="btn-no" onclick="answer(false)">לא ✗</button>
+    </div>
+
+    <div class="selected-preview">
+      <h3>נבחרו עד כה</h3>
+      <div class="selected-chips" id="selectedChips"><span style="color:var(--muted);font-size:13px">טרם נבחרו פריטים</span></div>
+    </div>
+
+    <button class="btn btn-ghost" onclick="stopSession()" style="width:100%">עצור סשן</button>
+  </div>
+
+  <!-- Results -->
+  <div class="result-screen" id="resultScreen">
+    <div class="result-icon">✅</div>
+    <div class="result-title">הסשן הסתיים!</div>
+    <div class="result-list" id="resultList"></div>
+    <div class="auth-section">
+      <p>שמור את הרשימה ב-Google Tasks כרשימה חדשה:</p>
+      <input type="text" id="taskListName" placeholder='שם הרשימה, למשל "קניות שישי"' style="width:100%">
+      <button class="btn btn-accent" onclick="saveToTasks()" style="width:100%">שמור ב-Google Tasks</button>
+      <div class="status-msg" id="saveStatus"></div>
+    </div>
+    <button class="btn btn-ghost" onclick="resetSession()" style="width:100%">סשן חדש</button>
+  </div>
+
+</div>
+
+<script>
+// ── State ──
+let items = JSON.parse(localStorage.getItem('grocery-items') || '[]');
+let session = { items: [], idx: 0, selected: [] };
+let recognition = null;
+let accessToken = null;
+
+// ── Persist ──
+function save() {
+  localStorage.setItem('grocery-items', JSON.stringify(items));
+}
+
+// ── Render master list ──
+function render() {
+  const list = document.getElementById('itemList');
+  const empty = document.getElementById('emptyState');
+  list.innerHTML = '';
+  empty.style.display = items.length ? 'none' : 'block';
+
+  items.forEach((item, i) => {
+    const row = document.createElement('div');
+    row.className = 'item-row';
+    row.draggable = true;
+    row.dataset.i = i;
+    row.innerHTML = `
+      <span class="drag-handle">⠿</span>
+      <span class="item-name">${item}</span>
+      <button class="btn-del" onclick="deleteItem(${i})">✕</button>
+    `;
+    // Drag-to-reorder
+    row.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', i); });
+    row.addEventListener('dragover', e => e.preventDefault());
+    row.addEventListener('drop', e => {
+      e.preventDefault();
+      const from = parseInt(e.dataTransfer.getData('text/plain'));
+      const to = i;
+      if (from === to) return;
+      const moved = items.splice(from, 1)[0];
+      items.splice(to, 0, moved);
+      save(); render();
+    });
+    list.appendChild(row);
+  });
+}
+
+function addItem() {
+  const inp = document.getElementById('newItem');
+  const val = inp.value.trim();
+  if (!val) return;
+  items.push(val);
+  save(); render();
+  inp.value = '';
+  inp.focus();
+}
+
+function deleteItem(i) {
+  items.splice(i, 1);
+  save(); render();
+}
+
+// ── Tabs ──
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', (i===0&&tab==='list')||(i===1&&tab==='session')));
+  document.getElementById('panel-list').classList.toggle('active', tab === 'list');
+  document.getElementById('panel-session').classList.toggle('active', tab === 'session');
+}
+
+// ── Google OAuth ──
+const CLIENT_ID = ''; // User must fill in
+const SCOPES = 'https://www.googleapis.com/auth/tasks';
+
+function connectGoogle() {
+  if (!CLIENT_ID) {
+    document.getElementById('authStatus').textContent = '⚠️ יש להגדיר Client ID (ראה הוראות למטה)';
+    document.getElementById('authStatus').className = 'status-msg err';
+    showClientIdInstructions();
+    return;
+  }
+  const params = new URLSearchParams({
+    client_id: CLIENT_ID,
+    redirect_uri: location.origin + location.pathname,
+    response_type: 'token',
+    scope: SCOPES,
+  });
+  location.href = `https://accounts.google.com/o/oauth2/auth?${params}`;
+}
+
+function checkOAuthReturn() {
+  const hash = new URLSearchParams(location.hash.slice(1));
+  const token = hash.get('access_token');
+  if (token) {
+    accessToken = token;
+    history.replaceState(null, '', location.pathname);
+    document.getElementById('authStatus').textContent = '✓ מחובר ל-Google';
+    document.getElementById('authStatus').className = 'status-msg ok';
+  }
+}
+
+function showClientIdInstructions() {
+  alert(`כדי לחבר Google Tasks:\n\n1. פתח console.cloud.google.com\n2. צור פרויקט חדש\n3. APIs & Services → Enable → Google Tasks API\n4. Credentials → Create → OAuth 2.0 Client ID (Web)\n5. Authorized redirect URI: ${location.origin + location.pathname}\n6. העתק את Client ID לתוך הקוד (שורת CLIENT_ID)`);
+}
+
+// ── Session ──
+function startSession() {
+  if (items.length === 0) {
+    alert('הוסף מוצרים לרשימת המלאי תחילה.');
+    return;
+  }
+  session = { items: [...items], idx: 0, selected: [] };
+  document.getElementById('sessionIdle').style.display = 'none';
+  document.getElementById('sessionActive').style.display = 'flex';
+  document.getElementById('resultScreen').style.display = 'none';
+  showCurrentItem();
+}
+
+function showCurrentItem() {
+  const { items, idx } = session;
+  if (idx >= items.length) { endSession(); return; }
+
+  const name = items[idx];
+  document.getElementById('currentItemName').textContent = name;
+  document.getElementById('progressBar').style.width = `${(idx / items.length) * 100}%`;
+  document.getElementById('progressLabel').textContent = `${idx + 1} / ${items.length}`;
+  document.getElementById('voiceAnswer').textContent = '';
+  document.getElementById('voiceAnswer').className = 'voice-answer';
+
+  speakItem(name);
+  startListening();
+}
+
+function speakItem(name) {
+  const utt = new SpeechSynthesisUtterance(`האם צריך ${name}?`);
+  utt.lang = 'he-IL';
+  utt.rate = 0.95;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(utt);
+  utt.onend = () => { startListening(); };
+}
+
+function startListening() {
+  if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) return;
+  stopListening();
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SR();
+  recognition.lang = 'he-IL';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.onresult = e => {
+    const transcript = e.results[0][0].transcript.trim();
+    handleVoice(transcript);
+  };
+  recognition.onerror = () => {};
+  // Start after TTS finishes (small delay to avoid overlap)
+  setTimeout(() => { try { recognition.start(); } catch(e){} }, 100);
+}
+
+function stopListening() {
+  if (recognition) { try { recognition.stop(); } catch(e){} recognition = null; }
+}
+
+function handleVoice(text) {
+  const yes = ['כן', 'כן.', 'אה כן', 'כן כן', 'יפה', 'בסדר'];
+  const no = ['לא', 'לא.', 'לא לא', 'אין'];
+  const lower = text.toLowerCase();
+  const isYes = yes.some(w => lower.includes(w));
+  const isNo = no.some(w => lower.includes(w));
+  if (isYes) answer(true);
+  else if (isNo) answer(false);
+  else {
+    // Show what was heard, re-listen
+    const el = document.getElementById('voiceAnswer');
+    el.textContent = `שמעתי: "${text}" — אמור כן או לא`;
+    el.className = 'voice-answer';
+    setTimeout(() => startListening(), 1500);
+  }
+}
+
+function answer(yes) {
+  stopListening();
+  speechSynthesis.cancel();
+  const name = session.items[session.idx];
+  const el = document.getElementById('voiceAnswer');
+
+  if (yes) {
+    session.selected.push(name);
+    el.textContent = '✓ נוסף';
+    el.className = 'voice-answer yes';
+    updateChips();
+  } else {
+    el.textContent = '✗ דלג';
+    el.className = 'voice-answer no';
+  }
+
+  session.idx++;
+  setTimeout(() => showCurrentItem(), 600);
+}
+
+function updateChips() {
+  const container = document.getElementById('selectedChips');
+  if (session.selected.length === 0) {
+    container.innerHTML = '<span style="color:var(--muted);font-size:13px">טרם נבחרו פריטים</span>';
+    return;
+  }
+  container.innerHTML = session.selected.map(s => `<span class="chip">${s}</span>`).join('');
+}
+
+function stopSession() {
+  stopListening();
+  speechSynthesis.cancel();
+  endSession();
+}
+
+function endSession() {
+  document.getElementById('sessionActive').style.display = 'none';
+  document.getElementById('resultScreen').style.display = 'flex';
+
+  const list = document.getElementById('resultList');
+  if (session.selected.length === 0) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:14px">לא נבחרו פריטים</div>';
+  } else {
+    list.innerHTML = session.selected.map(s => `<div class="result-item">${s}</div>`).join('');
+  }
+}
+
+function resetSession() {
+  document.getElementById('resultScreen').style.display = 'none';
+  document.getElementById('sessionIdle').style.display = 'flex';
+}
+
+// ── Google Tasks ──
+async function saveToTasks() {
+  if (!accessToken) {
+    document.getElementById('saveStatus').textContent = 'יש להתחבר ל-Google תחילה';
+    document.getElementById('saveStatus').className = 'status-msg err';
+    return;
+  }
+  if (session.selected.length === 0) {
+    document.getElementById('saveStatus').textContent = 'אין פריטים לשמירה';
+    document.getElementById('saveStatus').className = 'status-msg err';
+    return;
+  }
+
+  const listName = document.getElementById('taskListName').value.trim() || 'רשימת קניות';
+  const statusEl = document.getElementById('saveStatus');
+  statusEl.textContent = 'שומר...';
+  statusEl.className = 'status-msg';
+
+  try {
+    // 1. Create new task list
+    const listRes = await fetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: listName })
+    });
+    const listData = await listRes.json();
+    const listId = listData.id;
+
+    // 2. Add tasks
+    for (const item of session.selected) {
+      await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${listId}/tasks`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: item })
+      });
+    }
+
+    statusEl.textContent = `✓ נשמר! "${listName}" ב-Google Tasks`;
+    statusEl.className = 'status-msg ok';
+  } catch (e) {
+    statusEl.textContent = 'שגיאה בשמירה. נסה שוב.';
+    statusEl.className = 'status-msg err';
+  }
+}
+
+// ── Init ──
+render();
+checkOAuthReturn();
+
+// ── PWA Service Worker ──
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
