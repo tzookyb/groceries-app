@@ -581,6 +581,7 @@
 let items = JSON.parse(localStorage.getItem('grocery-items') || '[]');
 let session = { items: [], idx: 0, selected: [] };
 let recognition = null;
+let listeningActive = false;
 let accessToken = null;
 
 // ── Persist ──
@@ -683,12 +684,12 @@ function listenForAdd() {
 }
 
 function handleVoiceAdd(text) {
-  const lower = text.trim();
-  const isNext = ['הבא', 'הבא.', 'next', 'בא'].some(w => lower.includes(w));
-  const isDone = ['סיום', 'סיים', 'סיום.', 'עצור', 'done', 'finish'].some(w => lower.includes(w));
+  const lower = text.toLowerCase().trim();
+  const doneWords = ['סיום', 'סיים', 'עצור', 'done', 'finish'];
+  const nextWords = ['הבא', 'next', 'בא'];
 
+  const isDone = doneWords.some(w => lower.includes(w));
   if (isDone) {
-    // Save last pending item if exists before stopping
     if (pendingItem) {
       items.push(pendingItem);
       save(); render();
@@ -697,11 +698,21 @@ function handleVoiceAdd(text) {
     return;
   }
 
-  if (isNext) {
-    if (pendingItem) {
-      items.push(pendingItem);
+  // Find if "next" keyword appears in the text, and at what position
+  let nextPos = -1;
+  for (const w of nextWords) {
+    const idx = lower.indexOf(w);
+    if (idx !== -1 && (nextPos === -1 || idx < nextPos)) nextPos = idx;
+  }
+
+  if (nextPos !== -1) {
+    // Grab any item name spoken before the "next" keyword in the same breath
+    const inlineName = text.substring(0, nextPos).trim();
+    const itemToAdd = inlineName || pendingItem;
+    if (itemToAdd) {
+      items.push(itemToAdd);
       save(); render();
-      speak(`נוסף: ${pendingItem}`);
+      speak(`נוסף: ${itemToAdd}`);
       pendingItem = '';
       document.getElementById('voiceAddHeard').textContent = '';
     }
@@ -850,7 +861,6 @@ function showCurrentItem() {
   document.getElementById('voiceAnswer').className = 'voice-answer';
 
   speakItem(name);
-  startListening();
 }
 
 function speakItem(name) {
@@ -864,6 +874,7 @@ function speakItem(name) {
 
 function startListening() {
   if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) return;
+  listeningActive = true;
   stopListening();
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   recognition = new SR();
@@ -875,11 +886,17 @@ function startListening() {
     handleVoice(transcript);
   };
   recognition.onerror = () => {};
+  recognition.onend = () => {
+    if (!listeningActive) return; // was intentionally stopped
+    recognition = null;
+    if (session && session.idx < session.items.length) startListening();
+  };
   // Start after TTS finishes (small delay to avoid overlap)
   setTimeout(() => { try { recognition.start(); } catch(e){} }, 100);
 }
 
 function stopListening() {
+  listeningActive = false;
   if (recognition) { try { recognition.stop(); } catch(e){} recognition = null; }
 }
 
