@@ -863,19 +863,50 @@ function showCurrentItem() {
   speakItem(name);
 }
 
+function beep() {
+  return new Promise(resolve => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.15);
+      osc.onended = () => { ctx.close(); resolve(); };
+    } catch(e) { resolve(); }
+  });
+}
+
 function speakItem(name) {
-  const utt = new SpeechSynthesisUtterance(`האם צריך ${name}?`);
+  const utt = new SpeechSynthesisUtterance(name);
   utt.lang = 'he-IL';
   utt.rate = 0.95;
   speechSynthesis.cancel();
+
+  let listenerStarted = false;
+  const fallback = setTimeout(() => {
+    if (!listenerStarted) { listenerStarted = true; beep().then(startListening); }
+  }, 4000);
+
+  utt.onend = () => {
+    if (listenerStarted) return;
+    listenerStarted = true;
+    clearTimeout(fallback);
+    beep().then(startListening);
+  };
   speechSynthesis.speak(utt);
-  utt.onend = () => { startListening(); };
 }
 
 function startListening() {
   if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) return;
+  // Stop any existing instance without clearing listeningActive
+  if (recognition) { try { recognition.stop(); } catch(e){} recognition = null; }
   listeningActive = true;
-  stopListening();
+
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   recognition = new SR();
   recognition.lang = 'he-IL';
@@ -885,13 +916,16 @@ function startListening() {
     const transcript = e.results[0][0].transcript.trim();
     handleVoice(transcript);
   };
-  recognition.onerror = () => {};
-  recognition.onend = () => {
-    if (!listeningActive) return; // was intentionally stopped
+  recognition.onerror = e => {
+    if (!listeningActive || e.error === 'aborted') return;
     recognition = null;
-    if (session && session.idx < session.items.length) startListening();
+    setTimeout(startListening, 500);
   };
-  // Start after TTS finishes (small delay to avoid overlap)
+  recognition.onend = () => {
+    if (!listeningActive) return;
+    recognition = null;
+    if (session && session.idx < session.items.length) setTimeout(startListening, 300);
+  };
   setTimeout(() => { try { recognition.start(); } catch(e){} }, 100);
 }
 
