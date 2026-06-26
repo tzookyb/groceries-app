@@ -488,6 +488,20 @@
   <div class="add-row">
     <input type="text" id="newItem" placeholder="הוסף מוצר..." onkeydown="if(event.key==='Enter')addItem()">
     <button class="btn btn-accent" onclick="addItem()">הוסף</button>
+    <button class="btn btn-ghost" onclick="toggleVoiceAdd()" id="voiceAddBtn" title="הוסף בקול">🎙️</button>
+  </div>
+
+  <!-- Voice add mode banner -->
+  <div id="voiceAddBanner" style="display:none; background:var(--surface); border:1.5px solid var(--accent); border-radius:12px; padding:14px 16px; display:none; flex-direction:column; gap:8px;">
+    <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--accent); font-weight:600;">
+      <div class="pulse-dot"></div>
+      מצב הוספה קולית פעיל
+    </div>
+    <div style="font-size:12px; color:var(--muted); line-height:1.6;">
+      אמור שם המוצר ← אמור <strong style="color:var(--text)">«הבא»</strong> להוסיף ← אמור <strong style="color:var(--text)">«סיום»</strong> לסיים
+    </div>
+    <div id="voiceAddHeard" style="font-size:15px; color:var(--text); min-height:22px; font-weight:600;"></div>
+    <button class="btn btn-ghost" onclick="stopVoiceAdd()" style="align-self:flex-start; padding:6px 14px; font-size:13px;">עצור</button>
   </div>
   <div class="item-list" id="itemList"></div>
   <div class="empty-state" id="emptyState">
@@ -622,7 +636,90 @@ function deleteItem(i) {
   save(); render();
 }
 
-// ── Tabs ──
+// ── Voice Add Mode ──
+let voiceAddActive = false;
+let voiceAddRec = null;
+let pendingItem = '';
+
+function toggleVoiceAdd() {
+  if (voiceAddActive) stopVoiceAdd();
+  else startVoiceAdd();
+}
+
+function startVoiceAdd() {
+  voiceAddActive = true;
+  pendingItem = '';
+  document.getElementById('voiceAddBanner').style.display = 'flex';
+  document.getElementById('voiceAddBtn').style.borderColor = 'var(--accent)';
+  document.getElementById('voiceAddBtn').style.color = 'var(--accent)';
+  listenForAdd();
+}
+
+function stopVoiceAdd() {
+  voiceAddActive = false;
+  pendingItem = '';
+  if (voiceAddRec) { try { voiceAddRec.stop(); } catch(e){} voiceAddRec = null; }
+  document.getElementById('voiceAddBanner').style.display = 'none';
+  document.getElementById('voiceAddBtn').style.borderColor = '';
+  document.getElementById('voiceAddBtn').style.color = '';
+  document.getElementById('voiceAddHeard').textContent = '';
+}
+
+function listenForAdd() {
+  if (!voiceAddActive) return;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { alert('הדפדפן לא תומך בזיהוי קול'); return; }
+  voiceAddRec = new SR();
+  voiceAddRec.lang = 'he-IL';
+  voiceAddRec.continuous = false;
+  voiceAddRec.interimResults = false;
+  voiceAddRec.onresult = e => {
+    const text = e.results[0][0].transcript.trim();
+    handleVoiceAdd(text);
+  };
+  voiceAddRec.onend = () => { if (voiceAddActive) setTimeout(listenForAdd, 300); };
+  voiceAddRec.onerror = () => { if (voiceAddActive) setTimeout(listenForAdd, 500); };
+  try { voiceAddRec.start(); } catch(e) {}
+}
+
+function handleVoiceAdd(text) {
+  const lower = text.trim();
+  const isNext = ['הבא', 'הבא.', 'next', 'בא'].some(w => lower.includes(w));
+  const isDone = ['סיום', 'סיים', 'סיום.', 'עצור', 'done', 'finish'].some(w => lower.includes(w));
+
+  if (isDone) {
+    // Save last pending item if exists before stopping
+    if (pendingItem) {
+      items.push(pendingItem);
+      save(); render();
+    }
+    stopVoiceAdd();
+    return;
+  }
+
+  if (isNext) {
+    if (pendingItem) {
+      items.push(pendingItem);
+      save(); render();
+      speak(`נוסף: ${pendingItem}`);
+      pendingItem = '';
+      document.getElementById('voiceAddHeard').textContent = '';
+    }
+    return;
+  }
+
+  // It's a product name — store it
+  pendingItem = text;
+  document.getElementById('voiceAddHeard').textContent = `"${text}"`;
+}
+
+function speak(text) {
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = 'he-IL';
+  utt.rate = 1.1;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(utt);
+}
 function switchTab(tab) {
   document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', (i===0&&tab==='list')||(i===1&&tab==='session')));
   document.getElementById('panel-list').classList.toggle('active', tab === 'list');
