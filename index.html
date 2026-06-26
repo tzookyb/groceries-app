@@ -498,10 +498,14 @@
       מצב הוספה קולית פעיל
     </div>
     <div style="font-size:12px; color:var(--muted); line-height:1.6;">
-      אמור שם המוצר ← אמור <strong style="color:var(--text)">«הבא»</strong> להוסיף ← אמור <strong style="color:var(--text)">«סיום»</strong> לסיים
+      אמור שם מוצר ← אמור <strong style="color:var(--text)">«הבא»</strong> לפריט הבא ← אמור <strong style="color:var(--text)">«סיום»</strong> לשמירה
     </div>
-    <div id="voiceAddHeard" style="font-size:15px; color:var(--text); min-height:22px; font-weight:600;"></div>
-    <button class="btn btn-ghost" onclick="stopVoiceAdd()" style="align-self:flex-start; padding:6px 14px; font-size:13px;">עצור</button>
+    <div id="voiceAddList" style="display:flex; flex-direction:column; gap:4px;"></div>
+    <div id="voiceAddHeard" style="font-size:17px; color:var(--text); min-height:24px; font-weight:700;"></div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-accent" onclick="finishVoiceAdd()" style="padding:6px 14px; font-size:13px;">סיום ושמירה</button>
+      <button class="btn btn-ghost" onclick="stopVoiceAdd()" style="padding:6px 14px; font-size:13px;">בטל</button>
+    </div>
   </div>
   <div class="item-list" id="itemList"></div>
   <div class="empty-state" id="emptyState">
@@ -540,7 +544,7 @@
     <div class="current-item-card">
       <div class="current-item-label">האם צריך?</div>
       <div class="current-item-name" id="currentItemName">—</div>
-      <div class="listening-indicator">
+      <div class="listening-indicator" id="listeningIndicator">
         <div class="pulse-dot"></div>
         מאזין...
       </div>
@@ -640,7 +644,9 @@ function deleteItem(i) {
 // ── Voice Add Mode ──
 let voiceAddActive = false;
 let voiceAddRec = null;
-let pendingItem = '';
+let pendingItem = '';       // last finalized product name, awaiting commit
+let liveText = '';          // interim transcript — display only
+let voiceAddPending = [];   // items committed via «הבא», not yet saved
 
 function toggleVoiceAdd() {
   if (voiceAddActive) stopVoiceAdd();
@@ -648,80 +654,120 @@ function toggleVoiceAdd() {
 }
 
 function startVoiceAdd() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { alert('הדפדפן לא תומך בזיהוי קול. נסה Chrome באנדרואיד או במחשב.'); return; }
   voiceAddActive = true;
   pendingItem = '';
+  liveText = '';
+  voiceAddPending = [];
   document.getElementById('voiceAddBanner').style.display = 'flex';
   document.getElementById('voiceAddBtn').style.borderColor = 'var(--accent)';
   document.getElementById('voiceAddBtn').style.color = 'var(--accent)';
+  renderVoiceAdd();
   listenForAdd();
 }
 
 function stopVoiceAdd() {
   voiceAddActive = false;
   pendingItem = '';
+  liveText = '';
+  voiceAddPending = [];
   if (voiceAddRec) { try { voiceAddRec.stop(); } catch(e){} voiceAddRec = null; }
   document.getElementById('voiceAddBanner').style.display = 'none';
   document.getElementById('voiceAddBtn').style.borderColor = '';
   document.getElementById('voiceAddBtn').style.color = '';
   document.getElementById('voiceAddHeard').textContent = '';
+  document.getElementById('voiceAddList').innerHTML = '';
+}
+
+// Commit everything and save to the master list
+function finishVoiceAdd() {
+  if (!voiceAddActive) return;
+  if (pendingItem) { voiceAddPending.push(pendingItem); pendingItem = ''; }
+  const count = voiceAddPending.length;
+  if (count) {
+    items.push(...voiceAddPending);
+    save(); render();
+  }
+  if (count) speak(`נוספו ${count} מוצרים`);
+  stopVoiceAdd();
+}
+
+function renderVoiceAdd() {
+  const listEl = document.getElementById('voiceAddList');
+  listEl.innerHTML = voiceAddPending
+    .map((it, i) => `<div style="font-size:14px; color:var(--accent); font-weight:600;">${i + 1}. ${it}</div>`)
+    .join('');
+  const heardEl = document.getElementById('voiceAddHeard');
+  const current = (liveText || pendingItem).trim();
+  heardEl.textContent = current ? `🎤 ${current}` : 'מקשיב...';
 }
 
 function listenForAdd() {
   if (!voiceAddActive) return;
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { alert('הדפדפן לא תומך בזיהוי קול'); return; }
+  if (!SR) return;
   voiceAddRec = new SR();
   voiceAddRec.lang = 'he-IL';
-  voiceAddRec.continuous = false;
-  voiceAddRec.interimResults = false;
+  voiceAddRec.continuous = true;
+  voiceAddRec.interimResults = true;
   voiceAddRec.onresult = e => {
-    const text = e.results[0][0].transcript.trim();
-    handleVoiceAdd(text);
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      const t = r[0].transcript;
+      if (r.isFinal) handleVoiceAddFinal(t);
+      else interim += t;
+    }
+    liveText = interim;
+    renderVoiceAdd();
   };
-  voiceAddRec.onend = () => { if (voiceAddActive) setTimeout(listenForAdd, 300); };
-  voiceAddRec.onerror = () => { if (voiceAddActive) setTimeout(listenForAdd, 500); };
+  voiceAddRec.onend = () => { voiceAddRec = null; if (voiceAddActive) setTimeout(listenForAdd, 300); };
+  voiceAddRec.onerror = e => {
+    voiceAddRec = null;
+    if (voiceAddActive && e.error !== 'aborted') setTimeout(listenForAdd, 500);
+  };
   try { voiceAddRec.start(); } catch(e) {}
 }
 
-function handleVoiceAdd(text) {
+function handleVoiceAddFinal(text) {
   const lower = text.toLowerCase().trim();
-  const doneWords = ['סיום', 'סיים', 'עצור', 'done', 'finish'];
-  const nextWords = ['הבא', 'next', 'בא'];
+  const doneWords = ['סיום', 'סיים', 'לסיים', 'גמרתי', 'done', 'finish', 'end'];
+  const nextWords = ['הבא', 'הלאה', 'next'];
 
-  const isDone = doneWords.some(w => lower.includes(w));
-  if (isDone) {
-    if (pendingItem) {
-      items.push(pendingItem);
-      save(); render();
+  // earliest position of any keyword in a list
+  const earliest = (list) => {
+    let pos = -1;
+    for (const w of list) {
+      const idx = lower.indexOf(w);
+      if (idx !== -1 && (pos === -1 || idx < pos)) pos = idx;
     }
-    stopVoiceAdd();
+    return pos;
+  };
+
+  const donePos = earliest(doneWords);
+  if (donePos !== -1) {
+    const inline = text.substring(0, donePos).trim();
+    if (inline) pendingItem = inline;
+    finishVoiceAdd();
     return;
   }
 
-  // Find if "next" keyword appears in the text, and at what position
-  let nextPos = -1;
-  for (const w of nextWords) {
-    const idx = lower.indexOf(w);
-    if (idx !== -1 && (nextPos === -1 || idx < nextPos)) nextPos = idx;
-  }
-
+  const nextPos = earliest(nextWords);
   if (nextPos !== -1) {
-    // Grab any item name spoken before the "next" keyword in the same breath
-    const inlineName = text.substring(0, nextPos).trim();
-    const itemToAdd = inlineName || pendingItem;
-    if (itemToAdd) {
-      items.push(itemToAdd);
-      save(); render();
-      speak(`נוסף: ${itemToAdd}`);
-      pendingItem = '';
-      document.getElementById('voiceAddHeard').textContent = '';
-    }
+    const inline = text.substring(0, nextPos).trim();
+    const name = inline || pendingItem;
+    if (name) voiceAddPending.push(name);
+    pendingItem = '';
+    liveText = '';
+    renderVoiceAdd();
     return;
   }
 
-  // It's a product name — store it
-  pendingItem = text;
-  document.getElementById('voiceAddHeard').textContent = `"${text}"`;
+  // plain product name — remember it as the current pending item
+  pendingItem = text.trim();
+  liveText = '';
+  renderVoiceAdd();
 }
 
 function speak(text) {
@@ -842,6 +888,14 @@ function startSession() {
     alert('הוסף מוצרים לרשימת המלאי תחילה.');
     return;
   }
+  // Unlock audio on this user gesture (required by mobile browsers)
+  unlockAudio();
+  // If voice recognition isn't supported (e.g. iOS Safari), guide the user to the buttons
+  const supportsSR = ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window);
+  const indicator = document.getElementById('listeningIndicator');
+  if (indicator) indicator.innerHTML = supportsSR
+    ? '<div class="pulse-dot"></div> מאזין...'
+    : 'הזיהוי הקולי לא נתמך בדפדפן זה — ענה בכפתורים';
   session = { items: [...items], idx: 0, selected: [] };
   document.getElementById('sessionIdle').style.display = 'none';
   document.getElementById('sessionActive').style.display = 'flex';
@@ -863,21 +917,34 @@ function showCurrentItem() {
   speakItem(name);
 }
 
+// Shared AudioContext — must be created/resumed inside a user gesture on mobile
+let audioCtx = null;
+function unlockAudio() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch(e) {}
+}
+
+// Plays a short cue. ALWAYS resolves within ~250ms — never blocks the session.
 function beep() {
   return new Promise(resolve => {
+    let done = false;
+    const finish = () => { if (!done) { done = true; resolve(); } };
+    setTimeout(finish, 250); // safety net: never hang the flow
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(audioCtx.destination);
       osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.3, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.15);
-      osc.onended = () => { ctx.close(); resolve(); };
-    } catch(e) { resolve(); }
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.15);
+    } catch(e) { finish(); }
   });
 }
 
@@ -935,19 +1002,19 @@ function stopListening() {
 }
 
 function handleVoice(text) {
-  const yes = ['כן', 'כן.', 'אה כן', 'כן כן', 'יפה', 'בסדר'];
-  const no = ['לא', 'לא.', 'לא לא', 'אין'];
-  const lower = text.toLowerCase();
-  const isYes = yes.some(w => lower.includes(w));
-  const isNo = no.some(w => lower.includes(w));
+  const clean = text.replace(/[.,!?״"']/g, '').trim();
+  const lower = clean.toLowerCase();
+  const yes = ['כן', 'אוקיי', 'אוקי', 'בטח', 'יש', 'צריך', 'בסדר', 'yes', 'yep', 'ok'];
+  const no = ['לא', 'אין', 'דלג', 'no', 'nope', 'skip'];
+  const isNo = no.some(w => lower.includes(w));   // check "no" first (לא)
+  const isYes = !isNo && yes.some(w => lower.includes(w));
   if (isYes) answer(true);
   else if (isNo) answer(false);
   else {
-    // Show what was heard, re-listen
+    // No match — show what was heard. onend will auto-restart listening.
     const el = document.getElementById('voiceAnswer');
     el.textContent = `שמעתי: "${text}" — אמור כן או לא`;
     el.className = 'voice-answer';
-    setTimeout(() => startListening(), 1500);
   }
 }
 
