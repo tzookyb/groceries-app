@@ -586,7 +586,11 @@ let items = JSON.parse(localStorage.getItem('grocery-items') || '[]');
 let session = { items: [], idx: 0, selected: [] };
 let recognition = null;
 let listeningActive = false;
+let sessionListenGen = 0;
+let sessionRestartTimer = null;
 let accessToken = null;
+
+const isMobileSession = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
 function normalizeSpeechText(s) {
   return (s || '').replace(/[\u200e\u200f\ufeff]/g, '').normalize('NFC').trim();
@@ -968,49 +972,78 @@ function speakItem(name) {
 
   let listenerStarted = false;
   const fallback = setTimeout(() => {
-    if (!listenerStarted) { listenerStarted = true; beep().then(startListening); }
+    if (!listenerStarted) {
+      listenerStarted = true;
+      beep().then(() => setTimeout(startListening, isMobileSession ? 300 : 0));
+    }
   }, 4000);
 
   utt.onend = () => {
     if (listenerStarted) return;
     listenerStarted = true;
     clearTimeout(fallback);
-    beep().then(startListening);
+    beep().then(() => setTimeout(startListening, isMobileSession ? 300 : 0));
   };
   speechSynthesis.speak(utt);
 }
 
+function abortSessionRec() {
+  if (!recognition) return;
+  const rec = recognition;
+  recognition = null;
+  rec.onresult = null;
+  rec.onend = null;
+  rec.onerror = null;
+  try { rec.abort(); } catch(e) { try { rec.stop(); } catch(e2) {} }
+}
+
+function scheduleSessionRestart(delayMs) {
+  if (sessionRestartTimer) clearTimeout(sessionRestartTimer);
+  sessionRestartTimer = setTimeout(() => {
+    sessionRestartTimer = null;
+    startListening();
+  }, delayMs);
+}
+
 function startListening() {
   if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) return;
-  // Stop any existing instance without clearing listeningActive
-  if (recognition) { try { recognition.stop(); } catch(e){} recognition = null; }
+  if (!session || session.idx >= session.items.length) return;
+  abortSessionRec();
   listeningActive = true;
 
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  recognition = new SR();
-  recognition.lang = 'he-IL';
-  recognition.continuous = false;
-  recognition.interimResults = false;
-  recognition.onresult = e => {
+  const gen = ++sessionListenGen;
+  const rec = new SR();
+  recognition = rec;
+  rec.lang = 'he-IL';
+  rec.continuous = false;
+  rec.interimResults = false;
+  rec.onresult = e => {
+    if (gen !== sessionListenGen || !listeningActive) return;
     const transcript = e.results[0][0].transcript.trim();
     handleVoice(transcript);
   };
-  recognition.onerror = e => {
-    if (!listeningActive || e.error === 'aborted') return;
-    recognition = null;
-    setTimeout(startListening, 500);
+  rec.onerror = e => {
+    if (gen !== sessionListenGen) return;
+    if (recognition === rec) recognition = null;
+    if (listeningActive && e.error !== 'aborted') scheduleSessionRestart(isMobileSession ? 500 : 300);
   };
-  recognition.onend = () => {
-    if (!listeningActive) return;
-    recognition = null;
-    if (session && session.idx < session.items.length) setTimeout(startListening, 300);
+  rec.onend = () => {
+    if (gen !== sessionListenGen) return;
+    if (recognition === rec) recognition = null;
+    if (listeningActive && session.idx < session.items.length) scheduleSessionRestart(isMobileSession ? 400 : 300);
   };
-  setTimeout(() => { try { recognition.start(); } catch(e){} }, 100);
+  setTimeout(() => {
+    if (gen !== sessionListenGen || recognition !== rec) return;
+    try { rec.start(); } catch(e) {}
+  }, isMobileSession ? 350 : 100);
 }
 
 function stopListening() {
   listeningActive = false;
-  if (recognition) { try { recognition.stop(); } catch(e){} recognition = null; }
+  sessionListenGen++;
+  if (sessionRestartTimer) { clearTimeout(sessionRestartTimer); sessionRestartTimer = null; }
+  abortSessionRec();
 }
 
 function handleVoice(text) {
@@ -1047,7 +1080,7 @@ function answer(yes) {
   }
 
   session.idx++;
-  setTimeout(() => showCurrentItem(), 600);
+  setTimeout(() => showCurrentItem(), isMobileSession ? 900 : 600);
 }
 
 function updateChips() {
