@@ -498,7 +498,7 @@
       מצב הוספה קולית פעיל
     </div>
     <div style="font-size:12px; color:var(--muted); line-height:1.6;">
-      אמור שם מוצר ← אמור <strong style="color:var(--text)">«הבא»</strong> לפריט הבא ← אמור <strong style="color:var(--text)">«סיום»</strong> לשמירה
+      אמור שם מוצר ועצור רגע — עובר אוטומטית לפריט הבא ← לחץ <strong style="color:var(--text)">«סיום ושמירה»</strong> לסיום
     </div>
     <div id="voiceAddList" style="display:flex; flex-direction:column; gap:4px;"></div>
     <div id="voiceAddHeard" style="font-size:17px; color:var(--text); min-height:24px; font-weight:700;"></div>
@@ -588,6 +588,10 @@ let recognition = null;
 let listeningActive = false;
 let accessToken = null;
 
+function normalizeSpeechText(s) {
+  return (s || '').replace(/[\u200e\u200f\ufeff]/g, '').normalize('NFC').trim();
+}
+
 // ── Persist ──
 function save() {
   localStorage.setItem('grocery-items', JSON.stringify(items));
@@ -644,9 +648,22 @@ function deleteItem(i) {
 // ── Voice Add Mode ──
 let voiceAddActive = false;
 let voiceAddRec = null;
-let pendingItem = '';       // last finalized product name, awaiting commit
-let liveText = '';          // interim transcript — display only
-let voiceAddPending = [];   // items committed via «הבא», not yet saved
+let liveText = '';
+let voiceAddPending = [];
+let voiceAddLastCommitted = '';
+let voiceAddLastCommitTime = 0;
+let voiceAddRestartTimer = null;
+let voiceAddListenGen = 0;
+
+function abortVoiceAddRec() {
+  if (!voiceAddRec) return;
+  const rec = voiceAddRec;
+  voiceAddRec = null;
+  rec.onresult = null;
+  rec.onend = null;
+  rec.onerror = null;
+  try { rec.abort(); } catch(e) { try { rec.stop(); } catch(e2) {} }
+}
 
 function toggleVoiceAdd() {
   if (voiceAddActive) stopVoiceAdd();
@@ -658,9 +675,11 @@ function startVoiceAdd() {
   if (!SR) { alert('הדפדפן לא תומך בזיהוי קול. נסה Chrome באנדרואיד או במחשב.'); return; }
   unlockAudio(); // this is a user gesture — unlock audio for beeps
   voiceAddActive = true;
-  pendingItem = '';
   liveText = '';
   voiceAddPending = [];
+  voiceAddLastCommitted = '';
+  voiceAddLastCommitTime = 0;
+  if (voiceAddRestartTimer) { clearTimeout(voiceAddRestartTimer); voiceAddRestartTimer = null; }
   document.getElementById('voiceAddBanner').style.display = 'flex';
   document.getElementById('voiceAddBtn').style.borderColor = 'var(--accent)';
   document.getElementById('voiceAddBtn').style.color = 'var(--accent)';
@@ -670,10 +689,13 @@ function startVoiceAdd() {
 
 function stopVoiceAdd() {
   voiceAddActive = false;
-  pendingItem = '';
+  voiceAddListenGen++;
+  abortVoiceAddRec();
   liveText = '';
   voiceAddPending = [];
-  if (voiceAddRec) { try { voiceAddRec.stop(); } catch(e){} voiceAddRec = null; }
+  voiceAddLastCommitted = '';
+  voiceAddLastCommitTime = 0;
+  if (voiceAddRestartTimer) { clearTimeout(voiceAddRestartTimer); voiceAddRestartTimer = null; }
   document.getElementById('voiceAddBanner').style.display = 'none';
   document.getElementById('voiceAddBtn').style.borderColor = '';
   document.getElementById('voiceAddBtn').style.color = '';
@@ -684,7 +706,6 @@ function stopVoiceAdd() {
 // Commit everything and save to the master list
 function finishVoiceAdd() {
   if (!voiceAddActive) return;
-  if (pendingItem) { voiceAddPending.push(pendingItem); pendingItem = ''; }
   const count = voiceAddPending.length;
   if (count) {
     items.push(...voiceAddPending);
@@ -700,81 +721,65 @@ function renderVoiceAdd() {
     .map((it, i) => `<div style="font-size:14px; color:var(--accent); font-weight:600;">${i + 1}. ${it}</div>`)
     .join('');
   const heardEl = document.getElementById('voiceAddHeard');
-  const current = (liveText || pendingItem).trim();
+  const current = liveText.trim();
   heardEl.textContent = current ? `🎤 ${current}` : 'מקשיב...';
+}
+
+function scheduleVoiceAddRestart(delayMs) {
+  if (voiceAddRestartTimer) clearTimeout(voiceAddRestartTimer);
+  voiceAddRestartTimer = setTimeout(() => {
+    voiceAddRestartTimer = null;
+    listenForAdd();
+  }, delayMs);
+}
+
+function commitVoiceAddItem(text, gen) {
+  if (gen !== voiceAddListenGen || !voiceAddActive) return;
+  const name = normalizeSpeechText(text);
+  const now = Date.now();
+  if (!name) return;
+  if (name === voiceAddLastCommitted && now - voiceAddLastCommitTime < 800) return;
+  voiceAddPending.push(name);
+  voiceAddLastCommitted = name;
+  voiceAddLastCommitTime = now;
+  liveText = '';
+  beep(1175);
+  renderVoiceAdd();
 }
 
 function listenForAdd() {
   if (!voiceAddActive) return;
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) return;
-  voiceAddRec = new SR();
-  voiceAddRec.lang = 'he-IL';
-  voiceAddRec.continuous = true;
-  voiceAddRec.interimResults = true;
-  let handledFinals = 0; // finals already processed in THIS recognition instance
-  voiceAddRec.onresult = e => {
+  abortVoiceAddRec();
+  const gen = ++voiceAddListenGen;
+  const rec = new SR();
+  voiceAddRec = rec;
+  rec.lang = 'he-IL';
+  rec.continuous = false;
+  rec.interimResults = true;
+  rec.onresult = e => {
+    if (gen !== voiceAddListenGen || !voiceAddActive) return;
     let interim = '';
-    for (let i = 0; i < e.results.length; i++) {
+    for (let i = e.resultIndex; i < e.results.length; i++) {
       const r = e.results[i];
-      const t = r[0].transcript;
-      if (r.isFinal) {
-        // Process each finalized result exactly once — avoids re-adding old items
-        if (i >= handledFinals) { handleVoiceAddFinal(t); handledFinals = i + 1; }
-      } else {
-        interim += t;
-      }
+      if (r.isFinal) commitVoiceAddItem(r[0].transcript, gen);
+      else interim += r[0].transcript;
     }
     liveText = interim;
     renderVoiceAdd();
   };
-  voiceAddRec.onend = () => { voiceAddRec = null; if (voiceAddActive) setTimeout(listenForAdd, 300); };
-  voiceAddRec.onerror = e => {
-    voiceAddRec = null;
-    if (voiceAddActive && e.error !== 'aborted') setTimeout(listenForAdd, 500);
+  rec.onend = () => {
+    if (gen !== voiceAddListenGen) return;
+    if (voiceAddRec === rec) voiceAddRec = null;
+    if (voiceAddActive) scheduleVoiceAddRestart(100);
   };
-  try { voiceAddRec.start(); } catch(e) {}
-}
-
-function handleVoiceAddFinal(text) {
-  const lower = text.toLowerCase().trim();
-  const doneWords = ['סיום', 'סיים', 'לסיים', 'גמרתי', 'done', 'finish', 'end'];
-  const nextWords = ['הבא', 'הלאה', 'next'];
-
-  // earliest position of any keyword in a list
-  const earliest = (list) => {
-    let pos = -1;
-    for (const w of list) {
-      const idx = lower.indexOf(w);
-      if (idx !== -1 && (pos === -1 || idx < pos)) pos = idx;
-    }
-    return pos;
+  rec.onerror = e => {
+    if (gen !== voiceAddListenGen) return;
+    if (voiceAddRec === rec) voiceAddRec = null;
+    if (voiceAddActive && e.error !== 'aborted') scheduleVoiceAddRestart(300);
   };
-
-  const donePos = earliest(doneWords);
-  if (donePos !== -1) {
-    const inline = text.substring(0, donePos).trim();
-    if (inline) pendingItem = inline;
-    finishVoiceAdd();
-    return;
-  }
-
-  const nextPos = earliest(nextWords);
-  if (nextPos !== -1) {
-    const inline = text.substring(0, nextPos).trim();
-    const name = inline || pendingItem;
-    if (name) { voiceAddPending.push(name); beep(1175); } // higher beep = item committed, on to next
-    pendingItem = '';
-    liveText = '';
-    renderVoiceAdd();
-    return;
-  }
-
-  // plain product name — remember it as the current pending item
-  pendingItem = text.trim();
-  liveText = '';
-  beep(880); // confirm the item was heard
-  renderVoiceAdd();
+  try { rec.start(); } catch(e) {}
 }
 
 function speak(text) {
@@ -785,7 +790,7 @@ function speak(text) {
   speechSynthesis.speak(utt);
 }
 function switchTab(tab) {
-  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', (i===0&&tab==='list')||(i===1&&tab==='session')));
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', (i === 0 && tab === 'list') || (i === 1 && tab === 'session')));
   document.getElementById('panel-list').classList.toggle('active', tab === 'list');
   document.getElementById('panel-session').classList.toggle('active', tab === 'session');
 }
