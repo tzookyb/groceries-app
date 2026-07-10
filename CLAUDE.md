@@ -86,9 +86,10 @@ session via one factory `createSpeechEngine(onFinal)`:
   session engine beeps here — NOT before `begin()` — so the "your turn" cue lines up with the mic
   actually capturing (critical on mobile). Voice-add passes no `onStarted` (it beeps per capture).
 - **Multi-word debounce (continuous mode only):** Android finalizes a multi-word phrase word-by-word,
-  so committing on the first `isFinal` dropped later words. In continuous mode `onresult` keeps the
-  full accumulated transcript (`e.results` is cumulative) and commits only after `MULTIWORD_DELAY`
-  (~900ms) of silence, or on `onend` (flush). Desktop (non-continuous) still commits immediately —
+  so committing on the first `isFinal` dropped later words. In continuous mode `onresult` takes the
+  **longest** final transcript (Android re-emits a growing final at a NEW index — "רסק" then
+  "רסק עגבניות" — so concatenating all finals doubles the first word) and commits only after
+  `MULTIWORD_DELAY` (~900ms) of silence, or on `onend` (flush). Desktop (non-continuous) commits immediately —
   it gets the whole phrase in one final. Single-commit-per-instance still holds.
 - **Voice-add "cancel"** (`CANCEL_WORDS`: בטל/ביטול/מחק/טעות/cancel/undo…): pops the last captured
   pending item and beeps low (`beep(440)`) instead of adding. Voice-add only — not session.

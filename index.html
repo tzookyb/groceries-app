@@ -499,7 +499,7 @@ const LEGACY_KEY = 'grocery-items';
 
 // APP_VERSION is auto-incremented on every push to main (see
 // .github/workflows/bump-version.yml). Tap the 🛒 logo to see it.
-const APP_VERSION = 7;
+const APP_VERSION = 8;
 
 const isMobileSession = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
@@ -861,11 +861,17 @@ function createSpeechEngine(onFinal, onStarted) {
     r.onstart = () => { if (myGen === gen && active && onStarted) onStarted(); };
     r.onresult = e => {
       if (myGen !== gen || !active || hasCommitted) return;
+      // Android continuous mode re-emits a growing final at a NEW index instead
+      // of updating in place ("רסק", then "רסק עגבניות"), so concatenating all
+      // finals doubles the first word. Take the single LONGEST final — the most
+      // complete transcript of the phrase.
       let txt = '';
       for (let i = 0; i < e.results.length; i++) {
-        if (e.results[i].isFinal) txt += ' ' + e.results[i][0].transcript;
+        if (!e.results[i].isFinal) continue;
+        const t = e.results[i][0].transcript.trim();
+        if (t.length > txt.length) txt = t;
       }
-      if (!txt.trim()) return; // interim (non-final) event — wait for the final
+      if (!txt) return; // interim (non-final) event — wait for the final
       txt = normalizeSpeechText(txt);
       if (!txt) return;
       pendingFinal = txt;
