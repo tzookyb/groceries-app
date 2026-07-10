@@ -105,10 +105,12 @@ is called on the first tap of voice-add and session start.
 ## Versioning & release rule
 - `const APP_VERSION` (integer, in `index.html`) is the user-visible version. **Tapping the 🛒 logo
   alerts `גרסה N`.**
-- `.github/workflows/bump-version.yml` **auto-increments `APP_VERSION` on every push to `main`** and
-  keeps `sw.js`'s `CACHE` (`grocery-v<N>`) in sync — so you never need to bump `CACHE` by hand and
-  GitHub Pages clients always get a fresh cached shell. The bot's `[skip ci]` commit doesn't re-trigger.
-- `APP_VERSION` and the `CACHE` integer are kept identical by the workflow — don't diverge them manually.
+- `.githooks/pre-commit` **auto-increments `APP_VERSION` on every commit to `main`** and keeps
+  `sw.js`'s `CACHE` (`grocery-v<N>`) in sync as part of the same commit — so you never bump `CACHE`
+  by hand and GitHub Pages clients always get a fresh cached shell. (Chosen over a pre-push hook
+  because git resolves the pushed ref before pre-push runs, so a pre-push bump can't ride the same
+  push.) **Activate once per clone:** `git config core.hooksPath .githooks`.
+- `APP_VERSION` and the `CACHE` integer are kept identical by the hook — don't diverge them manually.
 
 ## Self-update rule
 Any agent that changes the **data model**, a **feature**, the **speech contract**, or the **store logic**

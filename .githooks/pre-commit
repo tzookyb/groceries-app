@@ -1,0 +1,21 @@
+#!/bin/sh
+# Auto-increment the integer APP_VERSION (and keep sw.js's CACHE name in sync)
+# on every commit to main, so the deployed PWA always shows a higher number than
+# the last one — tap the 🛒 logo to see it.
+#
+# Installed via a tracked hooks dir. Activate once per clone with:
+#   git config core.hooksPath .githooks
+
+branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+[ "$branch" = "main" ] || exit 0
+
+cur=$(grep -oE 'const APP_VERSION = [0-9]+' index.html | grep -oE '[0-9]+$')
+[ -n "$cur" ] || exit 0
+next=$((cur + 1))
+
+# macOS/BSD sed (this repo is developed on darwin).
+sed -i '' "s/const APP_VERSION = ${cur};/const APP_VERSION = ${next};/" index.html
+sed -i '' "s/const CACHE = 'grocery-v[0-9]*';/const CACHE = 'grocery-v${next}';/" sw.js
+
+git add index.html sw.js
+echo "pre-commit: bumped APP_VERSION ${cur} -> ${next} (CACHE grocery-v${next})"
