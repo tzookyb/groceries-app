@@ -499,7 +499,7 @@ const LEGACY_KEY = 'grocery-items';
 
 // APP_VERSION is auto-incremented on every push to main (see
 // .github/workflows/bump-version.yml). Tap the 🛒 logo to see it.
-const APP_VERSION = 8;
+const APP_VERSION = 9;
 
 const isMobileSession = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
@@ -838,48 +838,59 @@ function createSpeechEngine(onFinal, onStarted) {
     const myGen = gen;
     const r = new SR();
     rec = r;
-    let hasCommitted = false, pendingFinal = '', commitTimer = null;
+    // hasCommitted guards single-commit for non-continuous (desktop). In
+    // continuous mode ONE live instance commits many phrases; baseIdx marks where
+    // the current phrase's results start, and pendingEndIdx where the next begins.
+    let hasCommitted = false, pendingFinal = '', pendingEndIdx = 0, commitTimer = null, baseIdx = 0;
     function commit() {
-      if (myGen !== gen || !active || hasCommitted || !pendingFinal) return;
-      hasCommitted = true;
-      onFinal(pendingFinal);
-      // continuous mode won't fire onend promptly; re-arm a fresh instance so the
-      // next phrase is captured. In session mode the caller ends() before this
-      // runs, bumping gen and invalidating the scheduled restart.
-      if (r.continuous && active) scheduleStart(RESTART_DELAY);
+      if (myGen !== gen || !active || !pendingFinal) return;
+      const txt = pendingFinal; pendingFinal = '';
+      if (r.continuous) {
+        // Advance past this phrase and keep the SAME instance listening — no
+        // teardown/restart, so the mic stays hot and the next item spoken right
+        // after the beep is captured with no dead gap.
+        baseIdx = pendingEndIdx;
+        onFinal(txt);
+      } else {
+        if (hasCommitted) return;
+        hasCommitted = true;
+        onFinal(txt);
+      }
     }
     r.lang = 'he-IL';
     // On mobile keep the mic open across pauses: Android SR has a long warmup
-    // and with continuous=false it auto-stops after every phrase, so the user's
-    // answer keeps landing in the dead warmup/restart gap. continuous=true holds
-    // the mic live; we re-arm after each commit for multi-item (voice-add) flows.
+    // and with continuous=false it auto-stops after every phrase, so speech lands
+    // in the dead warmup/restart gap. continuous=true holds the mic live across
+    // many phrases on one instance (see baseIdx/commit above).
     r.continuous = isMobileSession;
     // interimResults MUST be true: Android Chrome never fires onresult when it's
     // false (mic runs, zero result events). We still commit ONLY from isFinal
-    // results below, so the single-commit-per-instance contract is unchanged.
+    // results below.
     r.interimResults = true;
     r.onstart = () => { if (myGen === gen && active && onStarted) onStarted(); };
     r.onresult = e => {
-      if (myGen !== gen || !active || hasCommitted) return;
-      // Android continuous mode re-emits a growing final at a NEW index instead
-      // of updating in place ("רסק", then "רסק עגבניות"), so concatenating all
-      // finals doubles the first word. Take the single LONGEST final — the most
-      // complete transcript of the phrase.
-      let txt = '';
-      for (let i = 0; i < e.results.length; i++) {
+      if (myGen !== gen || !active) return;
+      if (!r.continuous && hasCommitted) return;
+      // Only look at results for the CURRENT phrase (index >= baseIdx). Android
+      // re-emits a growing final at a NEW index ("רסק", then "רסק עגבניות"), so
+      // take the single LONGEST final rather than concatenating (which doubled
+      // the first word). Track the last final index so the next phrase starts
+      // after it (ignoring trailing interim slots).
+      let txt = '', lastFinal = -1;
+      for (let i = baseIdx; i < e.results.length; i++) {
         if (!e.results[i].isFinal) continue;
+        lastFinal = i;
         const t = e.results[i][0].transcript.trim();
         if (t.length > txt.length) txt = t;
       }
-      if (!txt) return; // interim (non-final) event — wait for the final
+      if (!txt) return; // only interim results so far — wait for a final
       txt = normalizeSpeechText(txt);
       if (!txt) return;
       pendingFinal = txt;
-      // In continuous mode Android finalizes a multi-word phrase word-by-word,
-      // so committing on the first final would drop the rest. Debounce: keep the
-      // full accumulated transcript (e.results is cumulative) and commit only
-      // after a brief silence. Desktop (non-continuous) gets the whole phrase in
-      // one final, so commit immediately for swiftness.
+      pendingEndIdx = lastFinal + 1;
+      // Android finalizes a multi-word phrase word-by-word; debounce so the whole
+      // phrase accumulates before we commit. Desktop (non-continuous) gets the
+      // whole phrase in one final, so commit immediately for swiftness.
       if (r.continuous) {
         if (commitTimer) clearTimeout(commitTimer);
         commitTimer = setTimeout(commit, MULTIWORD_DELAY);
@@ -896,7 +907,9 @@ function createSpeechEngine(onFinal, onStarted) {
       if (myGen !== gen) return;
       if (rec === r) rec = null;
       if (commitTimer) { clearTimeout(commitTimer); commitTimer = null; }
-      if (pendingFinal && !hasCommitted) { commit(); return; } // flush a phrase cut short by silence
+      if (pendingFinal) commit(); // flush a phrase cut short by silence
+      // Android eventually stops a continuous instance after long silence; resume
+      // with a fresh instance (baseIdx resets to 0 in the new one).
       if (active) scheduleStart(RESTART_DELAY);
     };
     setTimeout(() => {
@@ -959,11 +972,9 @@ function stopVoiceAdd() {
 
 function finishVoiceAdd() {
   if (!voiceAddActive) return;
-  const count = voiceAddPending.length;
-  if (count) {
+  if (voiceAddPending.length) {
     voiceAddPending.forEach(name => data.items.push({ id: slug(), name, stores: [] }));
     save(); renderMaster();
-    speak(`נוספו ${count} מוצרים`);
   }
   stopVoiceAdd();
 }

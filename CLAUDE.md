@@ -69,19 +69,24 @@ session via one factory `createSpeechEngine(onFinal)`:
   (interimResults **must** be `true`: Android Chrome fires **no** `onresult` events at all when
   it's `false` — mic runs but nothing is ever detected. The `onresult` handler ignores non-final
   events, so single-commit-per-instance + gen guard still prevent the historic multiply bug.)
-- **`hasCommitted` flag per `SpeechRecognition` instance** — each instance commits **at most once**;
-  after committing it ignores all further events.
+- **`hasCommitted` flag (non-continuous / desktop only)** — that instance commits **at most once**,
+  then ignores further events (restart via `onend` handles the next phrase). In **continuous mode**
+  ONE live instance commits **many** phrases (see `continuous` bullet); a per-phrase `baseIdx` (advanced
+  to the last-final index +1 on each commit) scopes each phrase, so repeats are still captured cleanly.
 - **Generation counter** (`gen`): every handler captures `myGen` at creation and bails if `myGen !== gen`.
   `begin()`/`end()` bump `gen`, invalidating in-flight handlers.
 - **Full teardown before restart**: null `onresult/onend/onerror`, `abort()`, then start a fresh instance
   after one consistent delay. **One restart-timer variable**, always cleared before reschedule.
-- **No name/time dedup.** Correctness comes from single-commit-per-instance + generation guard, so
-  deliberate repeats of the same word are captured, and the previous item is never duplicated.
+- **No name/time dedup.** Correctness comes from committing only from finals + the `baseIdx`/`hasCommitted`
+  phrase scoping + generation guard, so deliberate repeats of the same word are captured and the
+  previous item is never duplicated.
 - **`continuous = isMobileSession`**: on mobile the mic stays open across pauses (Android SR has a
-  long warmup and with `continuous=false` auto-stops after every phrase, so answers land in the dead
-  warmup/restart gap). Desktop keeps `false`. In continuous mode, `onresult` re-arms a fresh instance
-  after each commit (`scheduleStart`) so multi-item voice-add still captures the next phrase; in
-  session mode the caller `end()`s first, bumping `gen` to invalidate that restart.
+  long warmup and with `continuous=false` auto-stops after every phrase, so speech lands in the dead
+  warmup/restart gap). Desktop keeps `false`. In continuous mode we **do NOT tear down between phrases**
+  — the one live instance keeps listening and commits repeatedly via `baseIdx`, so an item spoken
+  right after the beep is captured with no dead gap. A fresh instance is only started when Android
+  itself ends the recognition after long silence (`onend` → `scheduleStart`). (Earlier versions
+  re-armed a fresh instance after every commit; that reintroduced the ~750ms dead gap and is gone.)
 - **`onStarted` callback** (2nd arg of `createSpeechEngine`): fires on the real `onstart` event. The
   session engine beeps here — NOT before `begin()` — so the "your turn" cue lines up with the mic
   actually capturing (critical on mobile). Voice-add passes no `onStarted` (it beeps per capture).
