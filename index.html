@@ -368,7 +368,7 @@
 <body>
 
 <header>
-  <div class="logo">🛒</div>
+  <div class="logo" onclick="alert('גרסה ' + APP_VERSION)" title="גרסה">🛒</div>
   <h1>רשימת <span>קניות</span> קולית</h1>
 </header>
 
@@ -496,6 +496,10 @@
 // ═══════════════════════════════════════════════════════════
 const DATA_KEY = 'grocery-data';
 const LEGACY_KEY = 'grocery-items';
+
+// APP_VERSION is auto-incremented on every push to main (see
+// .github/workflows/bump-version.yml). Tap the 🛒 logo to see it.
+const APP_VERSION = 5;
 
 const isMobileSession = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
@@ -811,13 +815,13 @@ const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const RESTART_DELAY = isMobileSession ? 400 : 200;
 const START_DELAY = isMobileSession ? 350 : 100;
 
-function createSpeechEngine(onFinal) {
+function createSpeechEngine(onFinal, onStarted) {
   let rec = null, gen = 0, active = false, restartTimer = null;
 
   function teardown() {
     if (!rec) return;
     const r = rec; rec = null;
-    r.onresult = null; r.onend = null; r.onerror = null;
+    r.onresult = null; r.onend = null; r.onerror = null; r.onstart = null;
     try { r.abort(); } catch (e) { try { r.stop(); } catch (e2) {} }
   }
   function clearTimer() { if (restartTimer) { clearTimeout(restartTimer); restartTimer = null; } }
@@ -833,11 +837,16 @@ function createSpeechEngine(onFinal) {
     rec = r;
     let hasCommitted = false;
     r.lang = 'he-IL';
-    r.continuous = false;
+    // On mobile keep the mic open across pauses: Android SR has a long warmup
+    // and with continuous=false it auto-stops after every phrase, so the user's
+    // answer keeps landing in the dead warmup/restart gap. continuous=true holds
+    // the mic live; we re-arm after each commit for multi-item (voice-add) flows.
+    r.continuous = isMobileSession;
     // interimResults MUST be true: Android Chrome never fires onresult when it's
     // false (mic runs, zero result events). We still commit ONLY from isFinal
     // results below, so the single-commit-per-instance contract is unchanged.
     r.interimResults = true;
+    r.onstart = () => { if (myGen === gen && active && onStarted) onStarted(); };
     r.onresult = e => {
       if (myGen !== gen || !active || hasCommitted) return;
       let txt = '';
@@ -849,6 +858,10 @@ function createSpeechEngine(onFinal) {
       if (!txt) return;
       hasCommitted = true;
       onFinal(txt);
+      // continuous mode won't fire onend promptly; re-arm a fresh instance so the
+      // next phrase is captured. In session mode the caller ends() before this
+      // fires, bumping gen and invalidating the scheduled restart.
+      if (r.continuous && active) scheduleStart(RESTART_DELAY);
     };
     r.onerror = e => {
       if (myGen !== gen) return;
@@ -1068,14 +1081,17 @@ function showCurrentItem() {
   speakItem(item.name);
 }
 
-const sessionSpeech = createSpeechEngine(text => handleVoice(text));
+// Beep on the real onstart (mic genuinely capturing) so the user knows exactly
+// when to answer — on mobile the mic has a long warmup and beeping earlier made
+// answers land before capture began.
+const sessionSpeech = createSpeechEngine(text => handleVoice(text), () => beep());
 
 function speakItem(name) {
   const utt = new SpeechSynthesisUtterance(name);
   utt.lang = 'he-IL'; utt.rate = 0.95;
   speechSynthesis.cancel();
   let started = false;
-  const go = () => { if (started) return; started = true; beep().then(() => setTimeout(() => sessionSpeech.begin(), isMobileSession ? 300 : 0)); };
+  const go = () => { if (started) return; started = true; setTimeout(() => sessionSpeech.begin(), isMobileSession ? 300 : 0); };
   const fallback = setTimeout(go, 4000);
   utt.onend = () => { clearTimeout(fallback); go(); };
   speechSynthesis.speak(utt);

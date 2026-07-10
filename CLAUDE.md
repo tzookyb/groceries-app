@@ -77,7 +77,15 @@ session via one factory `createSpeechEngine(onFinal)`:
   after one consistent delay. **One restart-timer variable**, always cleared before reschedule.
 - **No name/time dedup.** Correctness comes from single-commit-per-instance + generation guard, so
   deliberate repeats of the same word are captured, and the previous item is never duplicated.
-- Beep on every accepted capture: `beep(1175)` for voice-add, `beep()` for session answers.
+- **`continuous = isMobileSession`**: on mobile the mic stays open across pauses (Android SR has a
+  long warmup and with `continuous=false` auto-stops after every phrase, so answers land in the dead
+  warmup/restart gap). Desktop keeps `false`. In continuous mode, `onresult` re-arms a fresh instance
+  after each commit (`scheduleStart`) so multi-item voice-add still captures the next phrase; in
+  session mode the caller `end()`s first, bumping `gen` to invalidate that restart.
+- **`onStarted` callback** (2nd arg of `createSpeechEngine`): fires on the real `onstart` event. The
+  session engine beeps here — NOT before `begin()` — so the "your turn" cue lines up with the mic
+  actually capturing (critical on mobile). Voice-add passes no `onStarted` (it beeps per capture).
+- Beep on every accepted capture: `beep(1175)` for voice-add. Session beeps on `onstart` (mic live).
 - Keep the 4s `speakItem` TTS fallback and the mobile start/restart delays (`START_DELAY`, `RESTART_DELAY`).
 
 ## Audio beep contract
@@ -94,9 +102,13 @@ is called on the first tap of voice-add and session start.
 - **The service worker bypasses Google origins** (`googleapis.com`, `accounts.google.com`, `gsi/client`)
   in its `fetch` handler — never cache those.
 
-## Release rule
-**Bump `CACHE` in `sw.js` on every change** (currently `grocery-v4`), or GitHub Pages clients keep the
-stale cached shell.
+## Versioning & release rule
+- `const APP_VERSION` (integer, in `index.html`) is the user-visible version. **Tapping the 🛒 logo
+  alerts `גרסה N`.**
+- `.github/workflows/bump-version.yml` **auto-increments `APP_VERSION` on every push to `main`** and
+  keeps `sw.js`'s `CACHE` (`grocery-v<N>`) in sync — so you never need to bump `CACHE` by hand and
+  GitHub Pages clients always get a fresh cached shell. The bot's `[skip ci]` commit doesn't re-trigger.
+- `APP_VERSION` and the `CACHE` integer are kept identical by the workflow — don't diverge them manually.
 
 ## Self-update rule
 Any agent that changes the **data model**, a **feature**, the **speech contract**, or the **store logic**
@@ -114,4 +126,5 @@ Serve locally (`python3 -m http.server` in the repo) and open in **Chrome** (Web
 - **Export:** connect Google, finish a session → one list per store named `Store — DD/MM`, `×N` titles,
   aisle order preserved, unassigned items absent.
 - **Import/export:** export JSON, clear localStorage, import → state restored identically.
-- **PWA:** bump cache, reload twice → new version served offline.
+- **PWA:** push to main (CI bumps version + cache), reload twice → new version served offline; tap
+  the 🛒 logo → alert shows the incremented `APP_VERSION`.
