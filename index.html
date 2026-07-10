@@ -499,7 +499,7 @@ const LEGACY_KEY = 'grocery-items';
 
 // APP_VERSION is auto-incremented on every push to main (see
 // .github/workflows/bump-version.yml). Tap the 🛒 logo to see it.
-const APP_VERSION = 9;
+const APP_VERSION = 10;
 
 const isMobileSession = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
@@ -841,11 +841,14 @@ function createSpeechEngine(onFinal, onStarted) {
     // hasCommitted guards single-commit for non-continuous (desktop). In
     // continuous mode ONE live instance commits many phrases; baseIdx marks where
     // the current phrase's results start, and pendingEndIdx where the next begins.
-    let hasCommitted = false, pendingFinal = '', pendingEndIdx = 0, commitTimer = null, baseIdx = 0;
+    let hasCommitted = false, pendingFinal = '', pendingFull = '', pendingEndIdx = 0, commitTimer = null, baseIdx = 0, committedPrefix = '';
     function commit() {
       if (myGen !== gen || !active || !pendingFinal) return;
       const txt = pendingFinal; pendingFinal = '';
       if (r.continuous) {
+        // Remember the cumulative raw transcript so the NEXT phrase can strip it
+        // (Android re-emits the whole session transcript, prefix embedded).
+        committedPrefix = pendingFull;
         // Advance past this phrase and keep the SAME instance listening — no
         // teardown/restart, so the mic stays hot and the next item spoken right
         // after the beep is captured with no dead gap.
@@ -876,17 +879,27 @@ function createSpeechEngine(onFinal, onStarted) {
       // take the single LONGEST final rather than concatenating (which doubled
       // the first word). Track the last final index so the next phrase starts
       // after it (ignoring trailing interim slots).
-      let txt = '', lastFinal = -1;
+      let full = '', lastFinal = -1;
       for (let i = baseIdx; i < e.results.length; i++) {
         if (!e.results[i].isFinal) continue;
         lastFinal = i;
         const t = e.results[i][0].transcript.trim();
-        if (t.length > txt.length) txt = t;
+        if (t.length > full.length) full = t;
       }
-      if (!txt) return; // only interim results so far — wait for a final
-      txt = normalizeSpeechText(txt);
+      if (!full) return; // only interim results so far — wait for a final
+      // Android continuous SR re-emits the ENTIRE session transcript cumulatively,
+      // so a new phrase's final embeds every prior committed item ("rice" then
+      // "rice milky" then "rice milky coca cola"). Strip the committed prefix so we
+      // commit only the newly-spoken words. (baseIdx handles growing finals WITHIN
+      // one phrase; this handles the prefix carried ACROSS phrases.)
+      let itemRaw = full;
+      if (committedPrefix && full.startsWith(committedPrefix)) {
+        itemRaw = full.slice(committedPrefix.length);
+      }
+      let txt = normalizeSpeechText(itemRaw.trim());
       if (!txt) return;
       pendingFinal = txt;
+      pendingFull = full;
       pendingEndIdx = lastFinal + 1;
       // Android finalizes a multi-word phrase word-by-word; debounce so the whole
       // phrase accumulates before we commit. Desktop (non-continuous) gets the

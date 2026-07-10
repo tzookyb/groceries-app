@@ -96,6 +96,14 @@ session via one factory `createSpeechEngine(onFinal)`:
   "רסק עגבניות" — so concatenating all finals doubles the first word) and commits only after
   `MULTIWORD_DELAY` (~900ms) of silence, or on `onend` (flush). Desktop (non-continuous) commits immediately —
   it gets the whole phrase in one final. Single-commit-per-instance still holds.
+- **Cumulative-prefix strip (continuous mode only):** Android's continuous SR re-emits the **entire
+  session transcript** on each new phrase's final, so item N's final embeds every prior committed item
+  ("rice" → "rice milky" → "rice milky coca cola"). `baseIdx` skips old *result indices* but the prefix
+  lives *inside the new final's string*, so it survives — the historic "concatenated the previous item"
+  bug. Fix: on each continuous commit, save the cumulative raw transcript as `committedPrefix`; on the
+  next `onresult`, if the longest final `startsWith(committedPrefix)`, strip it and commit only the
+  new suffix. A fresh instance (post-`onend`) resets `committedPrefix`/`baseIdx` to '' /0, matching
+  Android's own session reset.
 - **Voice-add "cancel"** (`CANCEL_WORDS`: בטל/ביטול/מחק/טעות/cancel/undo…): pops the last captured
   pending item and beeps low (`beep(440)`) instead of adding. Voice-add only — not session.
 - Beep on every accepted capture: `beep(1175)` for voice-add (`beep(440)` on cancel). Session beeps
