@@ -65,7 +65,10 @@ one-release safety net.
 Historic bug: voice-add "multiplied the previous item" because it committed from **interim** results and
 patched it with a name/time dedup. The fix is a single strict contract, applied to **both** voice-add and
 session via one factory `createSpeechEngine(onFinal)`:
-- `continuous = false`, `interimResults = false` — **commit ONLY from final results.**
+- `continuous = false`, `interimResults = true` — **commit ONLY from `isFinal` results.**
+  (interimResults **must** be `true`: Android Chrome fires **no** `onresult` events at all when
+  it's `false` — mic runs but nothing is ever detected. The `onresult` handler ignores non-final
+  events, so single-commit-per-instance + gen guard still prevent the historic multiply bug.)
 - **`hasCommitted` flag per `SpeechRecognition` instance** — each instance commits **at most once**;
   after committing it ignores all further events.
 - **Generation counter** (`gen`): every handler captures `myGen` at creation and bails if `myGen !== gen`.

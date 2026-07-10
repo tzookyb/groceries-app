@@ -800,7 +800,8 @@ function speak(text) {
 
 // ═══════════════════════════════════════════════════════════
 //  Speech engine — ONE strict contract for add + session.
-//  • continuous=false, interimResults=false → commit ONLY from finals
+//  • continuous=false, interimResults=TRUE (Android fires no onresult when
+//    false) but we still commit ONLY from isFinal results
 //  • hasCommitted: each SpeechRecognition instance commits at most ONCE
 //  • generation counter: stale handlers ignored (myGen !== gen)
 //  • single restart timer, always cleared before reschedule
@@ -833,13 +834,17 @@ function createSpeechEngine(onFinal) {
     let hasCommitted = false;
     r.lang = 'he-IL';
     r.continuous = false;
-    r.interimResults = false;
+    // interimResults MUST be true: Android Chrome never fires onresult when it's
+    // false (mic runs, zero result events). We still commit ONLY from isFinal
+    // results below, so the single-commit-per-instance contract is unchanged.
+    r.interimResults = true;
     r.onresult = e => {
       if (myGen !== gen || !active || hasCommitted) return;
       let txt = '';
       for (let i = 0; i < e.results.length; i++) {
         if (e.results[i].isFinal) txt += e.results[i][0].transcript;
       }
+      if (!txt) return; // interim (non-final) event — wait for the final
       txt = normalizeSpeechText(txt);
       if (!txt) return;
       hasCommitted = true;
