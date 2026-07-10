@@ -85,7 +85,15 @@ session via one factory `createSpeechEngine(onFinal)`:
 - **`onStarted` callback** (2nd arg of `createSpeechEngine`): fires on the real `onstart` event. The
   session engine beeps here — NOT before `begin()` — so the "your turn" cue lines up with the mic
   actually capturing (critical on mobile). Voice-add passes no `onStarted` (it beeps per capture).
-- Beep on every accepted capture: `beep(1175)` for voice-add. Session beeps on `onstart` (mic live).
+- **Multi-word debounce (continuous mode only):** Android finalizes a multi-word phrase word-by-word,
+  so committing on the first `isFinal` dropped later words. In continuous mode `onresult` keeps the
+  full accumulated transcript (`e.results` is cumulative) and commits only after `MULTIWORD_DELAY`
+  (~900ms) of silence, or on `onend` (flush). Desktop (non-continuous) still commits immediately —
+  it gets the whole phrase in one final. Single-commit-per-instance still holds.
+- **Voice-add "cancel"** (`CANCEL_WORDS`: בטל/ביטול/מחק/טעות/cancel/undo…): pops the last captured
+  pending item and beeps low (`beep(440)`) instead of adding. Voice-add only — not session.
+- Beep on every accepted capture: `beep(1175)` for voice-add (`beep(440)` on cancel). Session beeps
+  on `onstart` (mic live).
 - Keep the 4s `speakItem` TTS fallback and the mobile start/restart delays (`START_DELAY`, `RESTART_DELAY`).
 
 ## Audio beep contract
@@ -121,7 +129,8 @@ Serve locally (`python3 -m http.server` in the repo) and open in **Chrome** (Web
 - **Migration:** with a legacy `grocery-items` string list in localStorage and no `grocery-data`, load →
   items appear with empty store pills, no data loss.
 - **Speech bug:** voice-add — say 5 distinct items with short pauses → each commits once, no duplication,
-  a beep per item. Say the same word twice deliberately → both captured.
+  a beep per item. Say the same word twice deliberately → both captured. Say a **two-word** item (e.g.
+  "רסק עגבניות") on mobile → captured whole, not just the first word. Say "בטל"/"cancel" → last item removed (low beep).
 - **Stores:** create 2 stores, tag an item to both, reorder each store's aisle order.
 - **Session "all":** run through items, answer mix of כן / לא / "שתיים" / a digit → chips show `name ×N`.
 - **Session "per store":** pick one store → only its items iterate, in aisle order.

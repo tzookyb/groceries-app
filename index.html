@@ -499,7 +499,7 @@ const LEGACY_KEY = 'grocery-items';
 
 // APP_VERSION is auto-incremented on every push to main (see
 // .github/workflows/bump-version.yml). Tap the 🛒 logo to see it.
-const APP_VERSION = 6;
+const APP_VERSION = 7;
 
 const isMobileSession = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
@@ -814,6 +814,9 @@ function speak(text) {
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const RESTART_DELAY = isMobileSession ? 400 : 200;
 const START_DELAY = isMobileSession ? 350 : 100;
+// Silence window (continuous mode only) to let a multi-word phrase finish
+// finalizing word-by-word before we commit it.
+const MULTIWORD_DELAY = 900;
 
 function createSpeechEngine(onFinal, onStarted) {
   let rec = null, gen = 0, active = false, restartTimer = null;
@@ -835,7 +838,16 @@ function createSpeechEngine(onFinal, onStarted) {
     const myGen = gen;
     const r = new SR();
     rec = r;
-    let hasCommitted = false;
+    let hasCommitted = false, pendingFinal = '', commitTimer = null;
+    function commit() {
+      if (myGen !== gen || !active || hasCommitted || !pendingFinal) return;
+      hasCommitted = true;
+      onFinal(pendingFinal);
+      // continuous mode won't fire onend promptly; re-arm a fresh instance so the
+      // next phrase is captured. In session mode the caller ends() before this
+      // runs, bumping gen and invalidating the scheduled restart.
+      if (r.continuous && active) scheduleStart(RESTART_DELAY);
+    }
     r.lang = 'he-IL';
     // On mobile keep the mic open across pauses: Android SR has a long warmup
     // and with continuous=false it auto-stops after every phrase, so the user's
@@ -851,17 +863,23 @@ function createSpeechEngine(onFinal, onStarted) {
       if (myGen !== gen || !active || hasCommitted) return;
       let txt = '';
       for (let i = 0; i < e.results.length; i++) {
-        if (e.results[i].isFinal) txt += e.results[i][0].transcript;
+        if (e.results[i].isFinal) txt += ' ' + e.results[i][0].transcript;
       }
-      if (!txt) return; // interim (non-final) event — wait for the final
+      if (!txt.trim()) return; // interim (non-final) event — wait for the final
       txt = normalizeSpeechText(txt);
       if (!txt) return;
-      hasCommitted = true;
-      onFinal(txt);
-      // continuous mode won't fire onend promptly; re-arm a fresh instance so the
-      // next phrase is captured. In session mode the caller ends() before this
-      // fires, bumping gen and invalidating the scheduled restart.
-      if (r.continuous && active) scheduleStart(RESTART_DELAY);
+      pendingFinal = txt;
+      // In continuous mode Android finalizes a multi-word phrase word-by-word,
+      // so committing on the first final would drop the rest. Debounce: keep the
+      // full accumulated transcript (e.results is cumulative) and commit only
+      // after a brief silence. Desktop (non-continuous) gets the whole phrase in
+      // one final, so commit immediately for swiftness.
+      if (r.continuous) {
+        if (commitTimer) clearTimeout(commitTimer);
+        commitTimer = setTimeout(commit, MULTIWORD_DELAY);
+      } else {
+        commit();
+      }
     };
     r.onerror = e => {
       if (myGen !== gen) return;
@@ -871,6 +889,8 @@ function createSpeechEngine(onFinal, onStarted) {
     r.onend = () => {
       if (myGen !== gen) return;
       if (rec === r) rec = null;
+      if (commitTimer) { clearTimeout(commitTimer); commitTimer = null; }
+      if (pendingFinal && !hasCommitted) { commit(); return; } // flush a phrase cut short by silence
       if (active) scheduleStart(RESTART_DELAY);
     };
     setTimeout(() => {
@@ -890,8 +910,19 @@ function createSpeechEngine(onFinal, onStarted) {
 let voiceAddActive = false;
 let voiceAddPending = [];
 
+// Say one of these to undo the last captured item (mis-recognition fix).
+const CANCEL_WORDS = ['בטל', 'ביטול', 'תבטל', 'מחק', 'תמחק', 'טעות', 'cancel', 'delete', 'undo', 'remove'];
+function isCancel(text) {
+  const low = text.toLowerCase().trim();
+  return CANCEL_WORDS.some(w => low === w || low.includes(w));
+}
+
 const addSpeech = createSpeechEngine(text => {
   if (!voiceAddActive) return;
+  if (isCancel(text)) {
+    if (voiceAddPending.length) { voiceAddPending.pop(); beep(440); renderVoiceAdd(); }
+    return;
+  }
   voiceAddPending.push(text);
   beep(1175);
   renderVoiceAdd();
