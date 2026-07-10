@@ -142,15 +142,14 @@
 
   .item-row {
     display: flex;
-    flex-direction: column;
-    gap: 10px;
+    align-items: center;
+    gap: 8px;
     background: var(--surface);
     border-radius: 12px;
     padding: 12px 14px;
     border: 1.5px solid var(--border);
   }
 
-  .item-row-top { display: flex; align-items: center; gap: 8px; }
   .item-name { flex: 1; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
 
   .move-btn, .btn-del {
@@ -169,25 +168,6 @@
   .btn-del:active { color: var(--red); background: var(--red-dim); }
   .move-btn:disabled { opacity: 0.3; }
 
-  .item-pills { display: flex; flex-wrap: wrap; gap: 6px; }
-
-  .pill {
-    min-height: 40px;
-    padding: 8px 14px;
-    border-radius: 20px;
-    border: 1.5px solid var(--border);
-    background: var(--surface2);
-    color: var(--muted);
-    font-family: 'Heebo', sans-serif;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  .pill.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
-
-  .pill-hint { font-size: 13px; color: var(--muted); padding: 4px 2px; }
-
   .empty-state {
     text-align: center;
     color: var(--muted);
@@ -195,31 +175,6 @@
     font-size: 14px;
     line-height: 1.8;
   }
-
-  /* ── Stores tab ── */
-  .store-card {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--surface);
-    border: 1.5px solid var(--border);
-    border-radius: 12px;
-    padding: 12px 14px;
-  }
-  .store-card .store-open {
-    flex: 1;
-    text-align: right;
-    background: none;
-    border: none;
-    color: var(--text);
-    font-family: 'Heebo', sans-serif;
-    font-size: 16px;
-    font-weight: 700;
-    cursor: pointer;
-    padding: 8px 0;
-    min-height: 44px;
-  }
-  .store-meta { font-size: 12px; color: var(--muted); font-weight: 400; }
 
   .section-title { font-size: 13px; color: var(--muted); font-weight: 600; margin-top: 8px; letter-spacing: 0.5px; }
 
@@ -233,35 +188,6 @@
   .backup-box p { font-size: 13px; color: var(--muted); line-height: 1.6; }
 
   /* ── Session ── */
-  .mode-selector { display: flex; gap: 8px; }
-  .mode-btn {
-    flex: 1;
-    min-height: 52px;
-    border-radius: 12px;
-    border: 1.5px solid var(--border);
-    background: var(--surface);
-    color: var(--muted);
-    font-family: 'Heebo', sans-serif;
-    font-size: 15px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  .mode-btn.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
-
-  select {
-    width: 100%;
-    background: var(--surface);
-    border: 1.5px solid var(--border);
-    border-radius: 12px;
-    color: var(--text);
-    font-family: 'Heebo', sans-serif;
-    font-size: 16px;
-    padding: 12px 16px;
-    min-height: 48px;
-    direction: rtl;
-  }
-
   .session-idle { display: flex; flex-direction: column; gap: 18px; padding: 8px 0; }
   .idle-center { display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 16px 0; }
 
@@ -340,7 +266,6 @@
   .result-group h4 { font-size: 15px; color: var(--accent); }
   .result-item { display: flex; align-items: center; gap: 10px; font-size: 15px; }
   .result-item::before { content: '✓'; color: var(--accent); font-weight: 700; }
-  .result-skip { font-size: 13px; color: var(--red); line-height: 1.6; }
 
   .auth-section {
     width: 100%;
@@ -375,7 +300,7 @@
 <div class="tabs">
   <button class="tab active" data-tab="list" onclick="switchTab('list')">רשימת מלאי</button>
   <button class="tab" data-tab="session" onclick="switchTab('session')">סשן קניות</button>
-  <button class="tab" data-tab="stores" onclick="switchTab('stores')">חנויות</button>
+  <button class="tab" data-tab="settings" onclick="switchTab('settings')">הגדרות</button>
 </div>
 
 <!-- ── TAB: Master List ── -->
@@ -413,13 +338,6 @@
 
   <!-- Idle -->
   <div class="session-idle" id="sessionIdle">
-    <div class="section-title">מצב סשן</div>
-    <div class="mode-selector">
-      <button class="mode-btn on" id="modeAll" onclick="setSessionMode('all')">כל הפריטים</button>
-      <button class="mode-btn" id="modeStore" onclick="setSessionMode('store')">לפי חנות</button>
-    </div>
-    <select id="sessionStoreSelect" style="display:none" onchange="sessionStoreId=this.value"></select>
-
     <div class="idle-center">
       <div class="big-mic" onclick="startSession()">🎙️</div>
       <div class="session-hint">
@@ -430,7 +348,7 @@
 
     <!-- Google Tasks auth -->
     <div class="auth-section">
-      <p>כדי לשמור לרשימות Google Tasks, יש להתחבר עם Google:</p>
+      <p>כדי לשמור לרשימת Google Tasks, יש להתחבר עם Google:</p>
       <button class="btn-google" id="connectBtn" onclick="connectGoogle()">
         <svg class="google-icon" viewBox="0 0 48 48"><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="#FBBC05" d="M10.53 28.59c-.5-1.45-.79-3-.79-4.59s.29-3.14.79-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/></svg>
         התחבר עם Google
@@ -476,7 +394,7 @@
     <div class="result-title">הסשן הסתיים!</div>
     <div id="resultBody" style="width:100%; display:flex; flex-direction:column; gap:12px;"></div>
     <div class="auth-section" id="saveSection">
-      <p>שמור רשימה נפרדת לכל חנות ב-Google Tasks (שם: <strong>שם החנות — DD/MM</strong>):</p>
+      <p>שמור את הרשימה ב-Google Tasks (שם: <strong>קניות — DD/MM</strong>):</p>
       <button class="btn btn-accent" onclick="saveToTasks()" style="width:100%">שמור ב-Google Tasks</button>
       <div class="status-msg" id="saveStatus"></div>
     </div>
@@ -485,25 +403,25 @@
 
 </div>
 
-<!-- ── TAB: Stores ── -->
-<div class="panel" id="panel-stores"></div>
+<!-- ── TAB: Settings / Backup ── -->
+<div class="panel" id="panel-settings"></div>
 
 <script>
 // ═══════════════════════════════════════════════════════════
-//  Data layer — schema v2 in localStorage['grocery-data']
-//  { version:2, stores:[{id,name}], items:[{id,name,stores:[storeId]}],
-//    aisleOrder:{ [storeId]:[itemId,...] } }
+//  Data layer — schema v3 in localStorage['grocery-data']
+//  { version:3, items:[{id,name}] }
+//  (v2 had stores + aisleOrder + per-item store tags — removed.)
 // ═══════════════════════════════════════════════════════════
 const DATA_KEY = 'grocery-data';
 const LEGACY_KEY = 'grocery-items';
 
 // APP_VERSION is auto-incremented on every push to main (see
 // .github/workflows/bump-version.yml). Tap the 🛒 logo to see it.
-const APP_VERSION = 11;
+const APP_VERSION = 12;
 
 const isMobileSession = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
-function slug() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function slug() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -513,27 +431,16 @@ function normalizeSpeechText(s) {
   return (s || '').replace(/[‎‏﻿]/g, '').normalize('NFC').trim();
 }
 
-// Enforce aisle-order invariants: every tagged item is present in its store's
-// order exactly once; no stale ids; no orphan stores/orders.
-function repairInvariants(d) {
-  d.version = 2;
-  d.stores = Array.isArray(d.stores) ? d.stores : [];
-  d.items = Array.isArray(d.items) ? d.items : [];
-  d.aisleOrder = (d.aisleOrder && typeof d.aisleOrder === 'object') ? d.aisleOrder : {};
-  const storeIds = new Set(d.stores.map(s => s.id));
-  Object.keys(d.aisleOrder).forEach(sid => { if (!storeIds.has(sid)) delete d.aisleOrder[sid]; });
-  d.items.forEach(it => {
-    it.stores = Array.isArray(it.stores) ? it.stores.filter(sid => storeIds.has(sid)) : [];
-  });
-  d.stores.forEach(s => {
-    const existing = Array.isArray(d.aisleOrder[s.id]) ? d.aisleOrder[s.id] : [];
-    const tagged = d.items.filter(it => it.stores.includes(s.id)).map(it => it.id);
-    const taggedSet = new Set(tagged);
-    const order = existing.filter(id => taggedSet.has(id));
-    tagged.forEach(id => { if (!order.includes(id)) order.push(id); });
-    d.aisleOrder[s.id] = order;
-  });
-  return d;
+// Normalize any loaded/imported blob into a clean v3: an array of {id,name}.
+// Tolerates v2 (drops store tags) and stray fields.
+function sanitize(d) {
+  const items = Array.isArray(d && d.items) ? d.items : [];
+  return {
+    version: 3,
+    items: items
+      .filter(it => it && (it.name != null))
+      .map(it => ({ id: it.id || slug(), name: String(it.name) }))
+  };
 }
 
 function load() {
@@ -541,77 +448,31 @@ function load() {
   if (raw) {
     try {
       const d = JSON.parse(raw);
-      if (d && d.version === 2) return repairInvariants(d);
+      // v3 (current) and v2 (had stores) both carry an items[] with names.
+      if (d && (d.version === 3 || d.version === 2) && Array.isArray(d.items)) return sanitize(d);
     } catch (e) {}
   }
-  // Migration: legacy string[] under grocery-items → v2 (legacy key kept as safety net)
+  // Migration: legacy string[] under grocery-items → v3 (legacy key kept as safety net)
   const legacy = localStorage.getItem(LEGACY_KEY);
   if (legacy) {
     try {
       const arr = JSON.parse(legacy);
       if (Array.isArray(arr)) {
-        const d = repairInvariants({
-          version: 2, stores: [],
-          items: arr.map(name => ({ id: slug(), name: String(name), stores: [] })),
-          aisleOrder: {}
-        });
+        const d = sanitize({ version: 3, items: arr.map(name => ({ id: slug(), name: String(name) })) });
         localStorage.setItem(DATA_KEY, JSON.stringify(d));
         return d;
       }
     } catch (e) {}
   }
-  return { version: 2, stores: [], items: [], aisleOrder: {} };
+  return { version: 3, items: [] };
 }
 
 function save() { localStorage.setItem(DATA_KEY, JSON.stringify(data)); }
 
 let data = load();
 
-// ── Store CRUD (maintains invariants) ──
-function addStore(name) {
-  name = (name || '').trim();
-  if (!name) return;
-  const s = { id: slug(), name };
-  data.stores.push(s);
-  data.aisleOrder[s.id] = [];
-  save(); renderStores(); renderMaster();
-}
-function renameStore(id) {
-  const s = data.stores.find(x => x.id === id);
-  if (!s) return;
-  const nn = prompt('שם חדש לחנות:', s.name);
-  if (nn && nn.trim()) { s.name = nn.trim(); save(); renderStores(); renderMaster(); }
-}
-function deleteStore(id) {
-  if (!confirm('למחוק את החנות? הפריטים יישארו אך יאבדו את השיוך אליה.')) return;
-  data.stores = data.stores.filter(s => s.id !== id);
-  delete data.aisleOrder[id];
-  data.items.forEach(it => { it.stores = it.stores.filter(sid => sid !== id); });
-  if (openStoreId === id) openStoreId = null;
-  save(); renderStores(); renderMaster();
-}
-
-// ── Item ↔ store tagging (maintains aisle-order invariant) ──
-function toggleItemStore(itemId, storeId) {
-  const it = data.items.find(i => i.id === itemId);
-  if (!it) return;
-  const idx = it.stores.indexOf(storeId);
-  if (idx >= 0) {
-    it.stores.splice(idx, 1);
-    const order = data.aisleOrder[storeId] || [];
-    const oi = order.indexOf(itemId);
-    if (oi >= 0) order.splice(oi, 1);
-    data.aisleOrder[storeId] = order;
-  } else {
-    it.stores.push(storeId);
-    if (!Array.isArray(data.aisleOrder[storeId])) data.aisleOrder[storeId] = [];
-    if (!data.aisleOrder[storeId].includes(itemId)) data.aisleOrder[storeId].push(itemId);
-  }
-  save(); renderMaster();
-}
-
 // ═══════════════════════════════════════════════════════════
-//  Master list (Tab 1)
+//  Master list (Tab 1) — array order = the order items are read in a session
 // ═══════════════════════════════════════════════════════════
 function renderMaster() {
   const list = document.getElementById('itemList');
@@ -622,19 +483,11 @@ function renderMaster() {
   data.items.forEach((item, i) => {
     const row = document.createElement('div');
     row.className = 'item-row';
-    const pills = data.stores.length
-      ? data.stores.map(s =>
-          `<button class="pill ${item.stores.includes(s.id) ? 'on' : ''}" onclick="toggleItemStore('${item.id}','${s.id}')">${esc(s.name)}</button>`
-        ).join('')
-      : '<span class="pill-hint">אין חנויות — הוסף בטאב «חנויות»</span>';
     row.innerHTML = `
-      <div class="item-row-top">
-        <span class="item-name">${esc(item.name)}</span>
-        <button class="move-btn" onclick="moveItem(${i},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
-        <button class="move-btn" onclick="moveItem(${i},1)" ${i === data.items.length - 1 ? 'disabled' : ''}>▼</button>
-        <button class="btn-del" onclick="deleteItem('${item.id}')">✕</button>
-      </div>
-      <div class="item-pills">${pills}</div>`;
+      <span class="item-name">${esc(item.name)}</span>
+      <button class="move-btn" onclick="moveItem(${i},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
+      <button class="move-btn" onclick="moveItem(${i},1)" ${i === data.items.length - 1 ? 'disabled' : ''}>▼</button>
+      <button class="btn-del" onclick="deleteItem('${item.id}')">✕</button>`;
     list.appendChild(row);
   });
 }
@@ -650,7 +503,7 @@ function addItem() {
   const inp = document.getElementById('newItem');
   const val = inp.value.trim();
   if (!val) return;
-  data.items.push({ id: slug(), name: val, stores: [] });
+  data.items.push({ id: slug(), name: val });
   save(); renderMaster();
   inp.value = '';
   inp.focus();
@@ -658,38 +511,15 @@ function addItem() {
 
 function deleteItem(id) {
   data.items = data.items.filter(it => it.id !== id);
-  Object.keys(data.aisleOrder).forEach(sid => {
-    data.aisleOrder[sid] = data.aisleOrder[sid].filter(x => x !== id);
-  });
   save(); renderMaster();
 }
 
 // ═══════════════════════════════════════════════════════════
-//  Stores tab (Tab 3)
+//  Settings tab (Tab 3) — backup export / import
 // ═══════════════════════════════════════════════════════════
-let openStoreId = null;
-
-function renderStores() {
-  const panel = document.getElementById('panel-stores');
-  if (openStoreId) { renderStoreDetail(panel); return; }
-
-  const storesHtml = data.stores.length
-    ? data.stores.map(s => {
-        const count = data.items.filter(it => it.stores.includes(s.id)).length;
-        return `<div class="store-card">
-            <button class="store-open" onclick="openStore('${s.id}')">${esc(s.name)} <span class="store-meta">(${count} פריטים ›)</span></button>
-            <button class="move-btn" onclick="renameStore('${s.id}')">✎</button>
-            <button class="btn-del" onclick="deleteStore('${s.id}')">✕</button>
-          </div>`;
-      }).join('')
-    : '<div class="empty-state">אין חנויות. הוסף חנות כדי לתייג מוצרים ולסדר מסלול קנייה.</div>';
-
+function renderSettings() {
+  const panel = document.getElementById('panel-settings');
   panel.innerHTML = `
-    <div class="add-row">
-      <input type="text" id="newStore" placeholder="שם חנות..." onkeydown="if(event.key==='Enter'){addStore(this.value); this.value='';}">
-      <button class="btn btn-accent" onclick="addStore(document.getElementById('newStore').value); document.getElementById('newStore').value='';" style="white-space:nowrap">הוסף</button>
-    </div>
-    <div style="display:flex; flex-direction:column; gap:8px;">${storesHtml}</div>
     <div class="section-title">גיבוי</div>
     <div class="backup-box">
       <p>כל המידע נשמר מקומית בלבד. ייצא גיבוי לפני מחיקת נתונים או מעבר מכשיר.</p>
@@ -701,42 +531,6 @@ function renderStores() {
     </div>`;
 }
 
-function renderStoreDetail(panel) {
-  const store = data.stores.find(s => s.id === openStoreId);
-  if (!store) { openStoreId = null; renderStores(); return; }
-  const order = data.aisleOrder[store.id] || [];
-  const rows = order.length
-    ? order.map((itemId, i) => {
-        const it = data.items.find(x => x.id === itemId);
-        if (!it) return '';
-        return `<div class="item-row"><div class="item-row-top">
-            <span class="item-name">${esc(it.name)}</span>
-            <button class="move-btn" onclick="moveAisle('${store.id}',${i},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
-            <button class="move-btn" onclick="moveAisle('${store.id}',${i},1)" ${i === order.length - 1 ? 'disabled' : ''}>▼</button>
-          </div></div>`;
-      }).join('')
-    : '<div class="empty-state">אין מוצרים משויכים לחנות זו.<br>סמן את החנות על מוצרים בטאב «רשימת מלאי».</div>';
-
-  panel.innerHTML = `
-    <button class="btn btn-ghost" onclick="closeStore()" style="width:100%">‹ חזרה לחנויות</button>
-    <div class="section-title">${esc(store.name)} — סדר מסלול (Aisle order)</div>
-    <div style="font-size:12px; color:var(--muted); line-height:1.6;">הסדר כאן קובע את סדר הפריטים בייצוא לחנות זו.</div>
-    <div class="item-list">${rows}</div>`;
-}
-
-function openStore(id) { openStoreId = id; renderStores(); }
-function closeStore() { openStoreId = null; renderStores(); }
-
-function moveAisle(storeId, i, dir) {
-  const order = data.aisleOrder[storeId];
-  if (!order) return;
-  const j = i + dir;
-  if (j < 0 || j >= order.length) return;
-  const tmp = order[i]; order[i] = order[j]; order[j] = tmp;
-  save(); renderStores();
-}
-
-// ── Backup export / import ──
 function exportBackup() {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -756,9 +550,9 @@ function importBackup(input) {
   reader.onload = () => {
     try {
       const d = JSON.parse(reader.result);
-      if (!d || d.version !== 2 || !Array.isArray(d.items) || !Array.isArray(d.stores)) throw new Error('bad');
-      data = repairInvariants(d);
-      save(); renderMaster(); openStoreId = null; renderStores();
+      if (!d || !Array.isArray(d.items)) throw new Error('bad');
+      data = sanitize(d);
+      save(); renderMaster();
       alert('הגיבוי יובא בהצלחה.');
     } catch (e) {
       alert('קובץ גיבוי לא תקין.');
@@ -986,7 +780,7 @@ function stopVoiceAdd() {
 function finishVoiceAdd() {
   if (!voiceAddActive) return;
   if (voiceAddPending.length) {
-    voiceAddPending.forEach(name => data.items.push({ id: slug(), name, stores: [] }));
+    voiceAddPending.forEach(name => data.items.push({ id: slug(), name }));
     save(); renderMaster();
   }
   stopVoiceAdd();
@@ -1005,8 +799,7 @@ function switchTab(tab) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab));
   if (tab === 'list') renderMaster();
-  if (tab === 'stores') renderStores();
-  if (tab === 'session') renderSessionSetup();
+  if (tab === 'settings') renderSettings();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1068,11 +861,9 @@ function ensureToken(callback) {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  Buy session (Tab 2) — modes + multiplier
+//  Buy session (Tab 2) — reads items in house order
 // ═══════════════════════════════════════════════════════════
-let session = null;             // { mode, storeId, items:[itemObj], idx, selected:[{itemId,qty}] }
-let sessionMode = 'all';
-let sessionStoreId = null;
+let session = null;             // { items:[itemObj], idx, selected:[{itemId,qty}] }
 
 const HEB_NUM = {
   'אחת':1,'אחד':1,'שתיים':2,'שתים':2,'שניים':2,'שני':2,'פעמיים':2,
@@ -1080,40 +871,11 @@ const HEB_NUM = {
   'שש':6,'שישה':6,'שבע':7,'שבעה':7,'שמונה':8,'תשע':9,'תשעה':9,'עשר':10,'עשרה':10
 };
 
-function renderSessionSetup() {
-  const sel = document.getElementById('sessionStoreSelect');
-  sel.innerHTML = data.stores.length
-    ? data.stores.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')
-    : '<option value="">— אין חנויות —</option>';
-  if (sessionStoreId && data.stores.some(s => s.id === sessionStoreId)) sel.value = sessionStoreId;
-  else sessionStoreId = sel.value || null;
-  sel.style.display = sessionMode === 'store' ? 'block' : 'none';
-}
-
-function setSessionMode(mode) {
-  sessionMode = mode;
-  document.getElementById('modeAll').classList.toggle('on', mode === 'all');
-  document.getElementById('modeStore').classList.toggle('on', mode === 'store');
-  renderSessionSetup();
-}
-
-function buildSessionItems() {
-  if (sessionMode === 'store') {
-    if (!sessionStoreId) return [];
-    const order = data.aisleOrder[sessionStoreId] || [];
-    return order.map(id => data.items.find(it => it.id === id)).filter(Boolean);
-  }
-  return data.items.slice(); // house order
-}
-
-function storeName(id) { const s = data.stores.find(x => x.id === id); return s ? s.name : ''; }
 function displayTitle(name, qty) { return qty > 1 ? `${name} ×${qty}` : name; }
 
 function startSession() {
-  if (sessionMode === 'store' && !sessionStoreId) { alert('בחר חנות לסשן לפי חנות.'); return; }
-  const sItems = buildSessionItems();
-  if (sItems.length === 0) {
-    alert(sessionMode === 'store' ? 'אין מוצרים משויכים לחנות זו.' : 'הוסף מוצרים לרשימת המלאי תחילה.');
+  if (data.items.length === 0) {
+    alert('הוסף מוצרים לרשימת המלאי תחילה.');
     return;
   }
   unlockAudio();
@@ -1122,7 +884,7 @@ function startSession() {
   if (indicator) indicator.innerHTML = supportsSR
     ? '<div class="pulse-dot"></div> מאזין...'
     : 'הזיהוי הקולי לא נתמך בדפדפן זה — ענה בכפתורים';
-  session = { mode: sessionMode, storeId: sessionStoreId, items: sItems, idx: 0, selected: [] };
+  session = { items: data.items.slice(), idx: 0, selected: [] };
   document.getElementById('sessionIdle').style.display = 'none';
   document.getElementById('sessionActive').style.display = 'flex';
   document.getElementById('resultScreen').style.display = 'none';
@@ -1222,29 +984,11 @@ function updateChips() {
 
 function stopSession() { sessionSpeech.end(); speechSynthesis.cancel(); endSession(); }
 
-// Group selected items by store, ordered per each store's aisle order.
-function buildExportGroups() {
-  const byStore = {};
-  const skipped = [];
-  session.selected.forEach(sel => {
-    const item = data.items.find(i => i.id === sel.itemId);
-    if (!item) return;
-    const targets = session.mode === 'store' ? [session.storeId] : item.stores.slice();
-    if (!targets.length) { skipped.push({ item, qty: sel.qty }); return; }
-    targets.forEach(sid => { (byStore[sid] = byStore[sid] || []).push({ item, qty: sel.qty }); });
-  });
-  const groups = [];
-  Object.keys(byStore).forEach(sid => {
-    const store = data.stores.find(s => s.id === sid);
-    if (!store) return;
-    const order = data.aisleOrder[sid] || [];
-    const sorted = byStore[sid].slice().sort((a, b) => {
-      const ia = order.indexOf(a.item.id), ib = order.indexOf(b.item.id);
-      return (ia < 0 ? 1e9 : ia) - (ib < 0 ? 1e9 : ib);
-    });
-    groups.push({ store, items: sorted });
-  });
-  return { groups, skipped };
+// Selected items, in the order they were presented (house order).
+function selectedItems() {
+  return session.selected
+    .map(sel => { const item = data.items.find(i => i.id === sel.itemId); return item ? { item, qty: sel.qty } : null; })
+    .filter(Boolean);
 }
 
 function endSession() {
@@ -1258,28 +1002,23 @@ function endSession() {
     saveSection.style.display = 'none';
     return;
   }
-  const { groups, skipped } = buildExportGroups();
-  let html = groups.map(g => `
+  const items = selectedItems();
+  body.innerHTML = `
     <div class="result-group">
-      <h4>${esc(g.store.name)}</h4>
-      ${g.items.map(x => `<div class="result-item">${esc(displayTitle(x.item.name, x.qty))}</div>`).join('')}
-    </div>`).join('');
-  if (skipped.length) {
-    html += `<div class="result-group"><div class="result-skip">⚠ פריטים ללא שיוך לחנות — לא ייוצאו:<br>${skipped.map(x => esc(displayTitle(x.item.name, x.qty))).join(', ')}</div></div>`;
-  }
-  body.innerHTML = html;
-  saveSection.style.display = groups.length ? 'flex' : 'none';
+      <h4>רשימת קניות</h4>
+      ${items.map(x => `<div class="result-item">${esc(displayTitle(x.item.name, x.qty))}</div>`).join('')}
+    </div>`;
+  saveSection.style.display = 'flex';
   document.getElementById('saveStatus').textContent = '';
 }
 
 function resetSession() {
   document.getElementById('resultScreen').style.display = 'none';
   document.getElementById('sessionIdle').style.display = 'flex';
-  renderSessionSetup();
 }
 
 // ═══════════════════════════════════════════════════════════
-//  Per-store export to Google Tasks — one new list per store per trip
+//  Export to Google Tasks — one new list per trip: "קניות — DD/MM"
 // ═══════════════════════════════════════════════════════════
 function saveToTasks() {
   if (!session || session.selected.length === 0) {
@@ -1292,38 +1031,34 @@ function saveToTasks() {
 
 async function _doSaveToTasks() {
   const statusEl = document.getElementById('saveStatus');
-  const { groups } = buildExportGroups();
-  if (!groups.length) { statusEl.textContent = 'אין פריטים משויכים לחנות'; statusEl.className = 'status-msg err'; return; }
+  const items = selectedItems();
+  if (!items.length) { statusEl.textContent = 'אין פריטים לשמירה'; statusEl.className = 'status-msg err'; return; }
 
   const d = new Date();
   const dm = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
   statusEl.textContent = 'שומר...'; statusEl.className = 'status-msg';
 
-  const results = [];
   try {
-    for (const g of groups) {
-      const title = `${g.store.name} — ${dm}`;
-      const listRes = await fetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists', {
+    const title = `קניות — ${dm}`;
+    const listRes = await fetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title })
+    });
+    const listData = await listRes.json();
+    const listId = listData.id;
+    let ok = 0;
+    // Google Tasks prepends new tasks; insert in reverse so house order is preserved top→bottom.
+    for (let i = items.length - 1; i >= 0; i--) {
+      const x = items[i];
+      const r = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${listId}/tasks`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title })
+        body: JSON.stringify({ title: displayTitle(x.item.name, x.qty) })
       });
-      const listData = await listRes.json();
-      const listId = listData.id;
-      let ok = 0;
-      // Google Tasks prepends new tasks; insert in reverse so aisle order is preserved top→bottom.
-      for (let i = g.items.length - 1; i >= 0; i--) {
-        const x = g.items[i];
-        const r = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${listId}/tasks`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: displayTitle(x.item.name, x.qty) })
-        });
-        if (r.ok) ok++;
-      }
-      results.push(`${g.store.name}: ${ok}/${g.items.length}`);
+      if (r.ok) ok++;
     }
-    statusEl.textContent = `✓ נשמר — ${results.join(' · ')}`;
+    statusEl.textContent = `✓ נשמר — ${ok}/${items.length} פריטים`;
     statusEl.className = 'status-msg ok';
   } catch (e) {
     statusEl.textContent = 'שגיאה בשמירה. נסה שוב.';

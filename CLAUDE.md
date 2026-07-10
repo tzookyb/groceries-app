@@ -2,9 +2,9 @@
 
 ## Project & goal
 A personal, Hebrew, voice-driven **grocery-inventory + shopping-list PWA**. You keep a master
-inventory of things you buy, tag each to the stores that sell it, then run a fast voice "buy session"
+inventory of things you buy in your own **house order**, then run a fast voice "buy session"
 that reads each item aloud and you answer **כן / לא / a number (quantity)**. Selected items are
-exported to **Google Tasks**, one new list per store per trip, in that store's shopping-route order.
+exported to **Google Tasks**, one new list per trip, in house order.
 
 ### Hard constraints
 - **Swift**: no long waits between items in a session. Minimal delays.
@@ -25,41 +25,32 @@ No build step, no dependencies, no framework.
 ## Data model (localStorage `grocery-data`, one JSON blob)
 ```js
 {
-  version: 2,
-  stores: [ { id, name } ],                        // e.g. Shufersal, OsherAd, KSP
-  items:  [ { id, name, stores: [storeId, ...] } ], // ARRAY ORDER = house order
-  aisleOrder: { [storeId]: [itemId, ...] }          // per-store shopping-route order
+  version: 3,
+  items:  [ { id, name } ]   // ARRAY ORDER = house order
 }
 ```
-- **House order** = the `items` array order (up/down reorder on the master list). Used by "all" session mode.
-- **Aisle order** = `aisleOrder[storeId]` (up/down reorder on the store's screen). Used by "per-store"
-  session mode and by that store's Google Tasks export.
-- `id` = `slug()` = `Date.now().toString(36) + Math.random().toString(36).slice(2,8)` (no `crypto` dependency).
-
-### Aisle-order invariants (maintain on EVERY mutation — enforced centrally by `repairInvariants()`)
-- Tagging an item to a store → append its `id` to that store's `aisleOrder`.
-- Untagging / deleting an item → remove its `id` from that store's `aisleOrder`.
-- Deleting a store → drop its `aisleOrder` entry and remove `storeId` from every item's `stores`.
-- `repairInvariants()` runs on `load()` and on import; it heals any drift (stale ids, missing entries,
-  orphan orders). Prefer routing new mutations through the existing helpers (`toggleItemStore`,
-  `deleteItem`, store CRUD) which already maintain invariants.
+- **House order** = the `items` array order (up/down reorder on the master list). It is the ONLY
+  ordering — used by the session and by the Google Tasks export.
+- `id` = `slug()` = `Date.now().toString(36) + Math.random().toString(36).slice(2,6)` (no `crypto` dependency).
+- `sanitize(d)` runs on `load()` and on import: coerces any blob into a clean v3 (array of `{id,name}`,
+  minting missing ids). It also silently upgrades a **v2** blob by keeping `items[].name` and dropping the
+  removed `stores` / `aisleOrder` fields.
 
 ### Migration
-On load: if `grocery-data` is absent but legacy `grocery-items` (a `string[]`) exists, convert each
-string → `{ id, name, stores: [] }`, write `grocery-data`. The legacy key is left untouched as a
-one-release safety net.
+- **Legacy `grocery-items` (`string[]`):** on load, if `grocery-data` is absent, convert each string →
+  `{ id, name }`, write `grocery-data`. The legacy key is left untouched as a one-release safety net.
+- **v2 → v3 (stores removed):** an existing v2 blob loads through `sanitize()`, which preserves item
+  names + house order and drops all store data. No user action needed.
 
 ## Feature map
-- **Tab 1 — רשימת מלאי (master list):** items with a toggleable **store pill** per store (tap = sold
-  there); up/down reorder = house order; text-add + voice-add.
-- **Tab 2 — סשן קניות (buy session):** mode selector — **all items** (house order) vs **per store**
-  (pick store → its aisle order). Each item: speak → listen → answer כן / לא / number. Selected tracked
-  as `{ itemId, qty }`; chips + tasks display `name ×N` (×1 omitted). Result screen groups by store,
-  saves per-store Google Tasks lists. Manual כן/לא + ×2–×5 buttons as fallback.
-- **Tab 3 — חנויות (stores):** add / rename / delete stores; per-store screen to reorder aisle order;
-  **backup** export (download full `grocery-data` JSON) + import (validate → replace).
-- **Per-store export:** "all" mode duplicates each selected item into each of its tagged stores;
-  "per store" mode → single store. **Unassigned selected items are skipped** (shown on the result screen).
+- **Tab 1 — רשימת מלאי (master list):** items in house order; up/down reorder; delete; text-add + voice-add.
+- **Tab 2 — סשן קניות (buy session):** single flow over all items in house order. Each item: speak →
+  listen → answer כן / לא / number. Selected tracked as `{ itemId, qty }`; chips + tasks display
+  `name ×N` (×1 omitted). Result screen lists selected items in house order and saves ONE Google Tasks
+  list. Manual כן/לא + ×2–×5 buttons as fallback.
+- **Tab 3 — הגדרות (settings):** **backup** export (download full `grocery-data` JSON) + import
+  (validate → `sanitize` → replace).
+- **Export:** all selected items → a single Google Tasks list, in house order.
 
 ## Speech-recognition contract (the top fragility area — treat as invariants)
 Historic bug: voice-add "multiplied the previous item" because it committed from **interim** results and
@@ -122,8 +113,8 @@ is called on the first tap of voice-add and session start.
 - `CLIENT_ID` = the OAuth web client id (in `index.html`); scope = `https://www.googleapis.com/auth/tasks`.
 - Auth via **GIS token client** (`google.accounts.oauth2.initTokenClient`); token persisted in
   `localStorage['grocery-gtoken']` with expiry; `ensureToken(cb)` re-auths silently when expired.
-- Export creates one list per store titled **`StoreName — DD/MM`**, tasks titled `name ×N` (×1 omitted),
-  inserted in **reverse** so Google's prepend-on-insert yields correct aisle order top→bottom.
+- Export creates ONE list per trip titled **`קניות — DD/MM`**, tasks titled `name ×N` (×1 omitted),
+  inserted in **reverse** so Google's prepend-on-insert yields correct house order top→bottom.
 - **The service worker bypasses Google origins** (`googleapis.com`, `accounts.google.com`, `gsi/client`)
   in its `fetch` handler — never cache those.
 
@@ -138,21 +129,21 @@ is called on the first tap of voice-add and session start.
 - `APP_VERSION` and the `CACHE` integer are kept identical by the hook — don't diverge them manually.
 
 ## Self-update rule
-Any agent that changes the **data model**, a **feature**, the **speech contract**, or the **store logic**
+Any agent that changes the **data model**, a **feature**, or the **speech contract**
 **must update this CLAUDE.md in the same change** and note what moved.
 
 ## Verification
 Serve locally (`python3 -m http.server` in the repo) and open in **Chrome** (Web Speech needs it).
-- **Migration:** with a legacy `grocery-items` string list in localStorage and no `grocery-data`, load →
-  items appear with empty store pills, no data loss.
+- **Migration (legacy):** with a legacy `grocery-items` string list in localStorage and no `grocery-data`,
+  load → items appear in house order, no data loss.
+- **Migration (v2 → v3):** with an old v2 `grocery-data` blob (stores + aisleOrder), load → item names +
+  house order preserved, store data silently dropped, no error.
 - **Speech bug:** voice-add — say 5 distinct items with short pauses → each commits once, no duplication,
   a beep per item. Say the same word twice deliberately → both captured. Say a **two-word** item (e.g.
   "רסק עגבניות") on mobile → captured whole, not just the first word. Say "בטל"/"cancel" → last item removed (low beep).
-- **Stores:** create 2 stores, tag an item to both, reorder each store's aisle order.
-- **Session "all":** run through items, answer mix of כן / לא / "שתיים" / a digit → chips show `name ×N`.
-- **Session "per store":** pick one store → only its items iterate, in aisle order.
-- **Export:** connect Google, finish a session → one list per store named `Store — DD/MM`, `×N` titles,
-  aisle order preserved, unassigned items absent.
-- **Import/export:** export JSON, clear localStorage, import → state restored identically.
+- **Session:** run through items in house order, answer mix of כן / לא / "שתיים" / a digit → chips show `name ×N`.
+- **Export:** connect Google, finish a session → ONE list named `קניות — DD/MM`, `×N` titles, house order
+  preserved top→bottom.
+- **Import/export:** export JSON (Tab 3 הגדרות), clear localStorage, import → state restored identically.
 - **PWA:** push to main (CI bumps version + cache), reload twice → new version served offline; tap
   the 🛒 logo → alert shows the incremented `APP_VERSION`.
