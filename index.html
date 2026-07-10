@@ -499,7 +499,7 @@ const LEGACY_KEY = 'grocery-items';
 
 // APP_VERSION is auto-incremented on every push to main (see
 // .github/workflows/bump-version.yml). Tap the 🛒 logo to see it.
-const APP_VERSION = 10;
+const APP_VERSION = 11;
 
 const isMobileSession = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
@@ -1142,17 +1142,21 @@ function showCurrentItem() {
   speakItem(item.name);
 }
 
-// Beep on the real onstart (mic genuinely capturing) so the user knows exactly
-// when to answer — on mobile the mic has a long warmup and beeping earlier made
-// answers land before capture began.
-const sessionSpeech = createSpeechEngine(text => handleVoice(text), () => beep());
+// The "your turn" beep fires the instant TTS finishes (in speakItem's go()) so
+// feedback is immediate. The mic still begins right after; on mobile continuous
+// mode keeps it open so the short warmup no longer eats the beep-to-capture gap.
+const sessionSpeech = createSpeechEngine(text => handleVoice(text));
 
 function speakItem(name) {
   const utt = new SpeechSynthesisUtterance(name);
-  utt.lang = 'he-IL'; utt.rate = 0.95;
+  utt.lang = 'he-IL'; utt.rate = 1.3;
   speechSynthesis.cancel();
   let started = false;
-  const go = () => { if (started) return; started = true; setTimeout(() => sessionSpeech.begin(), isMobileSession ? 300 : 0); };
+  const go = () => {
+    if (started) return; started = true;
+    beep();                                   // immediate "your turn" cue on speech end
+    setTimeout(() => sessionSpeech.begin(), isMobileSession ? 300 : 0);
+  };
   const fallback = setTimeout(go, 4000);
   utt.onend = () => { clearTimeout(fallback); go(); };
   speechSynthesis.speak(utt);
@@ -1190,12 +1194,13 @@ function answer(kind, qty) {
   const item = session.items[session.idx];
   const el = document.getElementById('voiceAnswer');
   if (kind === 'yes') {
-    beep();
+    beep(1319);                               // high beep = added (yes / amount)
     session.selected.push({ itemId: item.id, qty: qty || 1 });
     el.textContent = qty > 1 ? `✓ נוסף ×${qty}` : '✓ נוסף';
     el.className = 'voice-answer yes';
     updateChips();
   } else {
+    beep(392);                                // low beep = skipped (no)
     el.textContent = '✗ דלג';
     el.className = 'voice-answer no';
   }

@@ -87,9 +87,11 @@ session via one factory `createSpeechEngine(onFinal)`:
   right after the beep is captured with no dead gap. A fresh instance is only started when Android
   itself ends the recognition after long silence (`onend` → `scheduleStart`). (Earlier versions
   re-armed a fresh instance after every commit; that reintroduced the ~750ms dead gap and is gone.)
-- **`onStarted` callback** (2nd arg of `createSpeechEngine`): fires on the real `onstart` event. The
-  session engine beeps here — NOT before `begin()` — so the "your turn" cue lines up with the mic
-  actually capturing (critical on mobile). Voice-add passes no `onStarted` (it beeps per capture).
+- **`onStarted` callback** (2nd arg of `createSpeechEngine`): fires on the real `onstart` event.
+  Currently unused by session and voice-add (both pass no `onStarted`). The session's "your turn"
+  beep instead fires the instant TTS finishes (in `speakItem`'s `go()`), so feedback is immediate
+  rather than waiting for mic warmup; the mic `begin()`s right after (continuous mode keeps it open
+  on mobile so the short warmup no longer eats the beep-to-capture gap).
 - **Multi-word debounce (continuous mode only):** Android finalizes a multi-word phrase word-by-word,
   so committing on the first `isFinal` dropped later words. In continuous mode `onresult` takes the
   **longest** final transcript (Android re-emits a growing final at a NEW index — "רסק" then
@@ -107,7 +109,8 @@ session via one factory `createSpeechEngine(onFinal)`:
 - **Voice-add "cancel"** (`CANCEL_WORDS`: בטל/ביטול/מחק/טעות/cancel/undo…): pops the last captured
   pending item and beeps low (`beep(440)`) instead of adding. Voice-add only — not session.
 - Beep on every accepted capture: `beep(1175)` for voice-add (`beep(440)` on cancel). Session beeps
-  on `onstart` (mic live).
+  on TTS end (the "your turn" cue), then again on each answer: `beep(1319)` high for yes/amount,
+  `beep(392)` low for no.
 - Keep the 4s `speakItem` TTS fallback and the mobile start/restart delays (`START_DELAY`, `RESTART_DELAY`).
 
 ## Audio beep contract
