@@ -5,14 +5,14 @@ import { IconButton } from '../ui/IconButton';
 import { useGroceryData } from '../../hooks/useGroceryData';
 
 export function ShopsSection() {
-  const { data, addShop, deleteShop, cycleShopColor } = useGroceryData();
+  const { data, addShop, deleteShop, moveShop, cycleShopColor } = useGroceryData();
 
   return (
     <>
       <SectionTitle>חנויות</SectionTitle>
       <AddRow placeholder="הוסף חנות..." onAdd={addShop} />
       <div className="flex flex-col gap-2">
-        {data.shops.map(shop => (
+        {data.shops.map((shop, i) => (
           <NameRow key={shop.id}>
             <button
               type="button"
@@ -23,6 +23,8 @@ export function ShopsSection() {
               style={{ backgroundColor: shop.color }}
             />
             <span className="flex-1 text-base font-semibold [overflow-wrap:anywhere]">{shop.name}</span>
+            <IconButton kind="move" onClick={() => moveShop(i, -1)} disabled={i === 0}>▲</IconButton>
+            <IconButton kind="move" onClick={() => moveShop(i, 1)} disabled={i === data.shops.length - 1}>▼</IconButton>
             <IconButton kind="del" onClick={() => deleteShop(shop.id)}>✕</IconButton>
           </NameRow>
         ))}
