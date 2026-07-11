@@ -4,16 +4,25 @@ import { ItemList } from './ItemList';
 import { VoiceAddBanner } from './VoiceAddBanner';
 import { useGroceryData } from '../../hooks/useGroceryData';
 import { useVoiceAdd } from '../../hooks/useVoiceAdd';
+import { normalizeForDupCheck } from '../../lib/hebrew';
 
 export function MasterListTab() {
-  const { addItem } = useGroceryData();
-  const voiceAdd = useVoiceAdd(names => names.forEach(addItem));
+  const { data, addItem } = useGroceryData();
+
+  function addItemWithDupCheck(name: string) {
+    const norm = normalizeForDupCheck(name);
+    const existing = data.items.find(it => normalizeForDupCheck(it.name) === norm);
+    if (existing && !confirm(`"${existing.name}" כבר קיים ברשימה. להוסיף בכל זאת?`)) return;
+    addItem(name);
+  }
+
+  const voiceAdd = useVoiceAdd(names => names.forEach(addItemWithDupCheck));
 
   return (
     <>
       <AddRow
         placeholder="הוסף מוצר..."
-        onAdd={addItem}
+        onAdd={addItemWithDupCheck}
         extra={
           <Button
             variant="ghost"

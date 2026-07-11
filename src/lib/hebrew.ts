@@ -38,3 +38,10 @@ export function normalizeSpeechText(s: string): string {
 export function displayTitle(name: string, qty: number): string {
   return qty > 1 ? `${name} ×${qty}` : name;
 }
+
+// Loose match for duplicate-item detection: strips whitespace/hyphens/punctuation
+// and lowercases (Latin only — Hebrew has no case) so "עגבניות", "עגבניות ", and
+// "Tomato-Sauce"/"tomatosauce" are recognized as the same item.
+export function normalizeForDupCheck(s: string): string {
+  return (s || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+}
