@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { AddRow } from '../ui/AddRow';
 import { Button } from '../ui/Button';
 import { ItemList } from './ItemList';
+import { MasterListFilters } from './MasterListFilters';
 import { VoiceAddBanner } from './VoiceAddBanner';
 import { useGroceryData } from '../../hooks/useGroceryData';
 import { useVoiceAdd } from '../../hooks/useVoiceAdd';
@@ -8,6 +10,8 @@ import { normalizeForDupCheck } from '../../lib/hebrew';
 
 export function MasterListTab() {
   const { data, addItem } = useGroceryData();
+  const [selectedShopIds, setSelectedShopIds] = useState<string[]>([]);
+  const [unassignedOnly, setUnassignedOnly] = useState(false);
 
   function addItemWithDupCheck(name: string) {
     const norm = normalizeForDupCheck(name);
@@ -17,6 +21,22 @@ export function MasterListTab() {
   }
 
   const voiceAdd = useVoiceAdd(names => names.forEach(addItemWithDupCheck));
+
+  function toggleShop(id: string) {
+    setUnassignedOnly(false);
+    setSelectedShopIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+  }
+
+  function toggleUnassignedOnly() {
+    setSelectedShopIds([]);
+    setUnassignedOnly(prev => !prev);
+  }
+
+  const filteredItems = data.items.filter(item => {
+    if (unassignedOnly) return item.shopIds.length === 0;
+    if (selectedShopIds.length > 0) return item.shopIds.some(id => selectedShopIds.includes(id));
+    return true;
+  });
 
   return (
     <>
@@ -39,7 +59,19 @@ export function MasterListTab() {
         <VoiceAddBanner pending={voiceAdd.pending} onFinish={voiceAdd.finish} onCancel={voiceAdd.stop} />
       )}
 
-      <ItemList />
+      {data.items.length > 0 && (
+        <MasterListFilters
+          shops={data.shops}
+          selectedShopIds={selectedShopIds}
+          onToggleShop={toggleShop}
+          unassignedOnly={unassignedOnly}
+          onToggleUnassignedOnly={toggleUnassignedOnly}
+          visibleCount={filteredItems.length}
+          totalCount={data.items.length}
+        />
+      )}
+
+      <ItemList items={filteredItems} />
     </>
   );
 }
