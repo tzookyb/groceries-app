@@ -22,6 +22,7 @@ export function useSession(masterItems: Item[]) {
 
   const sessionRef = useRef<{ items: Item[]; idx: number; selected: SelectedEntry[] } | null>(null);
   const engineRef = useRef<SpeechEngine | null>(null);
+  const sessionShopIdsRef = useRef<string[]>([]);
 
   function getEngine(): SpeechEngine {
     if (!engineRef.current) engineRef.current = createSpeechEngine(text => handleVoice(text));
@@ -84,15 +85,22 @@ export function useSession(masterItems: Item[]) {
     setTimeout(showCurrentItem, isMobileSession ? 900 : 600);
   }
 
-  function start() {
+  function start(selectedShopIds: string[]) {
     if (masterItems.length === 0) {
       alert('הוסף מוצרים לרשימת המלאי תחילה.');
       return;
     }
+    if (masterItems.some(it => it.shopIds.length === 0)) {
+      alert('יש מוצרים ללא חנות — יש לשבץ חנות לכל מוצר לפני התחלת סשן.');
+      return;
+    }
+    if (selectedShopIds.length === 0) return;
+    const items = masterItems.filter(it => it.shopIds.some(id => selectedShopIds.includes(id)));
     unlockAudio();
-    sessionRef.current = { items: masterItems.slice(), idx: 0, selected: [] };
+    sessionShopIdsRef.current = selectedShopIds;
+    sessionRef.current = { items, idx: 0, selected: [] };
     setSelected([]);
-    setTotal(masterItems.length);
+    setTotal(items.length);
     setPhase('active');
     showCurrentItem();
   }
@@ -119,6 +127,7 @@ export function useSession(masterItems: Item[]) {
   return {
     phase, currentName, currentIdx, total, selected, voiceAnswer,
     supportsSR: !!SR,
+    sessionShopIds: sessionShopIdsRef.current,
     start, stop, reset, answer, selectedItems,
   };
 }

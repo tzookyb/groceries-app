@@ -3,17 +3,33 @@ import { Button } from '../ui/Button';
 import { StatusMsg, type StatusKind } from '../ui/StatusMsg';
 import { displayTitle } from '../../lib/hebrew';
 import { useGoogleAuth } from '../../hooks/useGoogleAuth';
-import { saveToTasks } from '../../services/googleTasks';
-import type { Item } from '../../types';
+import { saveToTasksByShop } from '../../services/googleTasks';
+import type { Item, Shop } from '../../types';
 
 interface ResultScreenProps {
   items: { item: Item; qty: number }[];
+  shops: Shop[];
+  shopIds: string[];
   onReset(): void;
 }
 
-export function ResultScreen({ items, onReset }: ResultScreenProps) {
+function todayDm(): string {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+export function ResultScreen({ items, shops, shopIds, onReset }: ResultScreenProps) {
   const { ensureToken } = useGoogleAuth();
   const [status, setStatus] = useState<{ text: string; kind: StatusKind }>({ text: '', kind: '' });
+
+  const dm = todayDm();
+  const groups = shopIds
+    .map(id => {
+      const shop = shops.find(s => s.id === id);
+      const sel = items.filter(x => x.item.shopIds.includes(id));
+      return shop && sel.length > 0 ? { shop, sel } : null;
+    })
+    .filter((g): g is { shop: Shop; sel: { item: Item; qty: number }[] } => g !== null);
 
   function handleSave() {
     if (items.length === 0) {
@@ -27,7 +43,7 @@ export function ResultScreen({ items, onReset }: ResultScreenProps) {
     if (!items.length) { setStatus({ text: 'אין פריטים לשמירה', kind: 'err' }); return; }
     setStatus({ text: 'שומר...', kind: '' });
     try {
-      const { ok, total } = await saveToTasks(items);
+      const { ok, total } = await saveToTasksByShop(groups.map(g => ({ title: `${g.shop.name} — ${dm}`, items: g.sel })));
       setStatus({ text: `✓ נשמר — ${ok}/${total} פריטים`, kind: 'ok' });
     } catch (e) {
       setStatus({ text: 'שגיאה בשמירה. נסה שוב.', kind: 'err' });
@@ -43,21 +59,23 @@ export function ResultScreen({ items, onReset }: ResultScreenProps) {
         {items.length === 0 ? (
           <div className="text-muted text-sm text-center">לא נבחרו פריטים</div>
         ) : (
-          <div className="w-full bg-surface rounded-app border-[1.5px] border-border p-4 flex flex-col gap-2">
-            <h4 className="text-[15px] text-accent">רשימת קניות</h4>
-            {items.map((x, i) => (
-              <div key={i} className="flex items-center gap-2.5 text-[15px] before:content-['✓'] before:text-accent before:font-bold">
-                {displayTitle(x.item.name, x.qty)}
-              </div>
-            ))}
-          </div>
+          groups.map(g => (
+            <div key={g.shop.id} className="w-full bg-surface rounded-app border-[1.5px] border-border p-4 flex flex-col gap-2">
+              <h4 className="text-[15px]" style={{ color: g.shop.color }}>{g.shop.name}</h4>
+              {g.sel.map((x, i) => (
+                <div key={i} className="flex items-center gap-2.5 text-[15px] before:content-['✓'] before:text-accent before:font-bold">
+                  {displayTitle(x.item.name, x.qty)}
+                </div>
+              ))}
+            </div>
+          ))
         )}
       </div>
 
       {items.length > 0 && (
         <div className="w-full bg-surface border-[1.5px] border-border rounded-app p-5 flex flex-col gap-3">
           <p className="text-[13px] text-muted leading-[1.6]">
-            שמור את הרשימה ב-Google Tasks (שם: <strong>קניות — DD/MM</strong>):
+            שמור רשימה לכל חנות ב-Google Tasks (שם: <strong>חנות — DD/MM</strong>):
           </p>
           <Button variant="accent" onClick={handleSave} className="w-full">שמור ב-Google Tasks</Button>
           <StatusMsg kind={status.kind}>{status.text}</StatusMsg>

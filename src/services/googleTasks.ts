@@ -7,13 +7,13 @@ export interface SelectedItem {
   qty: number;
 }
 
-// Export to Google Tasks — one new list per trip: "קניות — DD/MM"
-export async function saveToTasks(items: SelectedItem[]): Promise<{ ok: number; total: number }> {
-  const accessToken = getAccessToken();
-  const d = new Date();
-  const dm = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-  const title = `קניות — ${dm}`;
+export interface TaskGroup {
+  title: string;
+  items: SelectedItem[];
+}
 
+async function saveOneList(title: string, items: SelectedItem[]): Promise<number> {
+  const accessToken = getAccessToken();
   const listRes = await fetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists', {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -32,5 +32,16 @@ export async function saveToTasks(items: SelectedItem[]): Promise<{ ok: number; 
     });
     if (r.ok) ok++;
   }
-  return { ok, total: items.length };
+  return ok;
+}
+
+// Export one Google Tasks list per shop — a shared item appears in every group it belongs to.
+export async function saveToTasksByShop(groups: TaskGroup[]): Promise<{ ok: number; total: number }> {
+  let ok = 0;
+  let total = 0;
+  for (const group of groups) {
+    ok += await saveOneList(group.title, group.items);
+    total += group.items.length;
+  }
+  return { ok, total };
 }

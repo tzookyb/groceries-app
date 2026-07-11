@@ -2,9 +2,10 @@
 
 ## Project & goal
 A personal, Hebrew, voice-driven **grocery-inventory + shopping-list PWA**. You keep a master
-inventory of things you buy in your own **house order**, then run a fast voice "buy session"
-that reads each item aloud and you answer **כן / לא / a number (quantity)**. Selected items are
-exported to **Google Tasks**, one new list per trip, in house order.
+inventory of things you buy in your own **house order**, tag each item with the shop(s) you buy
+it at, then run a fast voice "buy session" scoped to one or more chosen shops that reads each
+item aloud and you answer **כן / לא / a number (quantity)**. Selected items are exported to
+**Google Tasks**, one list per shop per trip, in house order.
 
 ### Hard constraints
 - **Swift**: no long waits between items in a session. Minimal delays.
@@ -39,10 +40,10 @@ only the code organization moved.
 ## Data model (localStorage `grocery-data`, one JSON blob)
 ```js
 {
-  version: 3,
-  updatedAt: <ms epoch>,     // last local write; drives last-write-wins Drive sync (0 if never)
-  items:  [ { id, name } ],  // ARRAY ORDER = house order
-  shops:  [ { id, name } ]   // user's shops (settings tab); display-only, no ordering semantics
+  version: 4,
+  updatedAt: <ms epoch>,               // last local write; drives last-write-wins Drive sync (0 if never)
+  items:  [ { id, name, shopIds } ],   // ARRAY ORDER = house order; shopIds = which shops this item is bought at
+  shops:  [ { id, name, color } ]      // user's shops (settings tab); display-only order, color = palette hex
 }
 ```
 - `updatedAt` is stamped on every write by `useGroceryData`'s mutators (`src/hooks/useGroceryData.tsx`,
@@ -51,29 +52,47 @@ only the code organization moved.
 - **House order** = the `items` array order (up/down reorder on the master list). It is the ONLY
   ordering — used by the session and by the Google Tasks export.
 - `id` = `slug()` = `Date.now().toString(36) + Math.random().toString(36).slice(2,6)` (no `crypto` dependency).
-- `sanitize(d)` runs on `load()` and on import: coerces any blob into a clean v3 (`items[]` + `shops[]`,
-  each an array of `{id,name}`, minting missing ids). It also silently upgrades a **v2** blob by keeping `items[].name` and dropping the
-  removed `stores` / `aisleOrder` fields.
+- `shopIds` (v4): which shops an item is tagged for, toggled via colored pills on the master list
+  (`src/components/ui/ShopPill.tsx`). A session requires every master item to have ≥1 shop before
+  it can start (see Feature map). `shop.color` is auto-assigned from `src/lib/shopColors.ts`'s fixed
+  `SHOP_PALETTE` on add (`colorAt(index)`), and cycles through the palette on tap (`nextColor`).
+- `sanitize(d)` runs on `load()` and on import: coerces any blob into a clean v4 (`items[]` + `shops[]`).
+  Shops are sanitized first (id/name/color, minting missing ids and palette colors by index), then
+  items (`id`/`name`/`shopIds`) — each item's `shopIds` is pruned to ids that exist in the sanitized
+  shops, so a deleted/mismatched shop reference can never linger as an orphan.
 
 ### Migration
 - **Legacy `grocery-items` (`string[]`):** on load, if `grocery-data` is absent, convert each string →
   `{ id, name }`, write `grocery-data`. The legacy key is left untouched as a one-release safety net.
 - **v2 → v3 (stores removed):** an existing v2 blob loads through `sanitize()`, which preserves item
   names + house order and drops all store data. No user action needed.
+- **v3 → v4 (shop tagging added):** an existing v3 blob loads through `sanitize()`: items gain
+  `shopIds: []` (untagged) and shops gain a palette `color` by index. No user action, but a session
+  can't start until every item is tagged with a shop (the start-gate alert walks the user through it).
 
 ## Feature map
 - **Tab 1 — רשימת מלאי (master list):** items in house order; up/down reorder; delete; text-add + voice-add.
-- **Tab 2 — סשן קניות (buy session):** single flow over all items in house order. Each item: speak →
+  Each row also shows one color-coded `ShopPill` per shop (`src/components/ui/ShopPill.tsx`); tapping
+  toggles whether the item belongs to that shop (`toggleItemShop`, `src/hooks/useGroceryData.tsx`).
+  Pills row only renders when at least one shop exists.
+- **Tab 2 — סשן קניות (buy session):** the idle screen (`SessionIdle.tsx`) shows shop pills for
+  multi-select — the start affordance is disabled until ≥1 shop is picked (`canStart`, state owned by
+  `SessionTab.tsx`). Starting is **blocked** with a Hebrew alert if any master item has no shop tagged
+  (`useSession.ts`'s `start(selectedShopIds)` gate) — every item must be tagged before a session can run.
+  The session then iterates only items belonging to ≥1 selected shop, in house order. Each item: speak →
   listen → answer כן / לא / number. Selected tracked as `{ itemId, qty }`; chips + tasks display
-  `name ×N` (×1 omitted). Result screen lists selected items in house order and saves ONE Google Tasks
-  list. Manual כן/לא + ×2–×5 buttons as fallback.
-- **Tab 3 — הגדרות (settings):** **חנויות** (`ShopsSection`) — add shops via text input, remove each
-  (display-only list, no ordering); **Google** (`GoogleSection`) — connect / disconnect (drives both
-  Tasks export and Drive sync; state from the `useGoogleAuth` context); **backup** (`BackupSection`)
-  export (download full `grocery-data` JSON) + import (validate → `sanitize` → replace). The connect
-  button used to live on the session idle screen — it moved here; the session's export button
-  (`saveToTasks`) still auths on demand via `ensureToken`.
-- **Export:** all selected items → a single Google Tasks list, in house order.
+  `name ×N` (×1 omitted). Result screen groups selected items by shop and saves **one Google Tasks list
+  per selected shop** (shared items appear in every list they belong to). Manual כן/לא + ×2–×5 buttons
+  as fallback.
+- **Tab 3 — הגדרות (settings):** **חנויות** (`ShopsSection`) — add shops via text input (auto-assigned a
+  palette color), tap a shop's color swatch to cycle it through the palette (`cycleShopColor`), remove
+  each (also strips the shop from every item's `shopIds`, preventing orphans); **Google** (`GoogleSection`)
+  — connect / disconnect (drives both Tasks export and Drive sync; state from the `useGoogleAuth`
+  context); **backup** (`BackupSection`) export (download full `grocery-data` JSON) + import
+  (validate → `sanitize` → replace). The connect button used to live on the session idle screen — it
+  moved here; the session's export (`saveToTasksByShop`) still auths on demand via `ensureToken`.
+- **Export:** one Google Tasks list per selected shop, `SHOP — DD/MM`, that shop's selected items in
+  house order; an item tagged to multiple selected shops appears in each of its lists.
 
 ## Speech-recognition contract (the top fragility area — treat as invariants)
 Lives in `src/lib/speech.ts` (`createSpeechEngine`), lifted **verbatim** from the original
@@ -173,8 +192,10 @@ session start (`useSession.start`).
   `localStorage['grocery-gtoken']` with expiry; `ensureToken(cb)` re-auths silently when expired.
   `useGoogleAuth` (Context) wraps this so `connected` state is shared across the whole app (session
   result screen + settings).
-- Export creates ONE list per trip titled **`קניות — DD/MM`**, tasks titled `name ×N` (×1 omitted),
-  inserted in **reverse** so Google's prepend-on-insert yields correct house order top→bottom.
+- Export creates **one list per selected shop** titled **`SHOP — DD/MM`** (`saveToTasksByShop`, groups
+  built in `ResultScreen.tsx` from the session's selected shop ids), tasks titled `name ×N` (×1 omitted),
+  each list's tasks inserted in **reverse** so Google's prepend-on-insert yields correct house order
+  top→bottom. A shared item appears once per list it's tagged for.
 - The generated SW never precaches or intercepts cross-origin requests (`googleapis.com`,
   `accounts.google.com`, `gsi/client`) — only same-origin build assets are in its precache list.
 
@@ -224,15 +245,22 @@ Any agent that changes the **data model**, a **feature**, the **speech contract*
 Run `npm run dev` (or `npm run build && npm run preview`) and open in **Chrome** (Web Speech needs it).
 - **Migration (legacy):** with a legacy `grocery-items` string list in localStorage and no `grocery-data`,
   load → items appear in house order, no data loss.
-- **Migration (v2 → v3):** with an old v2 `grocery-data` blob (stores + aisleOrder), load → item names +
-  house order preserved, store data silently dropped, no error.
+- **Migration (v2 → v3 → v4):** with an old v2/v3 `grocery-data` blob, load → item names + house order
+  preserved, items show no active shop pills, shops get distinct palette colors, no error; `grocery-data`
+  in localStorage now shows `version: 4`.
 - **Speech bug:** voice-add — say 5 distinct items with short pauses → each commits once, no duplication,
   a beep per item. Say the same word twice deliberately → both captured. Say a **two-word** item (e.g.
   "רסק עגבניות") on mobile → captured whole, not just the first word. Say "בטל"/"cancel" → last item removed (low beep).
-- **Session:** run through items in house order, answer mix of כן / לא / "שתיים" / a digit → chips show `name ×N`.
-- **Export:** connect Google, finish a session → ONE list named `קניות — DD/MM`, `×N` titles, house order
-  preserved top→bottom.
-- **Import/export:** export JSON (Tab 3 הגדרות), clear localStorage, import → state restored identically.
+- **Tagging:** on the master list, tap shop pills on an item → active/inactive toggles persist across reload.
+- **Settings color:** tap a shop's color swatch → cycles palette; that shop's pills recolor everywhere.
+- **Start gate:** with ≥1 item untagged, open session, pick a shop, attempt start → blocked with a Hebrew
+  alert. Tag all items → start allowed; start stays disabled until ≥1 shop is picked.
+- **Session:** select a subset of shops, run through only items in those shops in house order, answer mix
+  of כן / לא / "שתיים" / a digit → chips show `name ×N`.
+- **Export:** tag a shared item to two shops, select both, finish a session → Google Tasks shows **two**
+  lists named `SHOP — DD/MM`, the shared item in both, `×N` titles, house order preserved top→bottom.
+- **Import/export:** export JSON (Tab 3 הגדרות), clear localStorage, import → items + shopIds + shop
+  colors restored identically.
 - **Build:** `npm run build` succeeds; `npm run preview` serves under `/groceries-app/`; tap the 🛒
   logo → alert shows `package.json`'s `version`.
 - **PWA:** push to main (CI builds + deploys, pre-commit bumped the version), reload twice → new

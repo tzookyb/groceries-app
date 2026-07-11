@@ -4,7 +4,7 @@ import { ItemRow } from './ItemRow';
 import { EmptyState } from './EmptyState';
 
 export function ItemList() {
-  const { data, deleteItem, moveItem, editItem } = useGroceryData();
+  const { data, deleteItem, moveItem, editItem, toggleItemShop } = useGroceryData();
   const [editingId, setEditingId] = useState<string | null>(null);
 
   if (data.items.length === 0) return <EmptyState />;
@@ -15,6 +15,7 @@ export function ItemList() {
         <ItemRow
           key={item.id}
           item={item}
+          shops={data.shops}
           isFirst={i === 0}
           isLast={i === data.items.length - 1}
           editing={editingId === item.id}
@@ -23,6 +24,7 @@ export function ItemList() {
           onCommitEdit={name => { editItem(item.id, name); setEditingId(null); }}
           onMove={dir => moveItem(i, dir)}
           onDelete={() => deleteItem(item.id)}
+          onToggleShop={shopId => toggleItemShop(item.id, shopId)}
         />
       ))}
     </div>

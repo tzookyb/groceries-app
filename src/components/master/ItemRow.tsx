@@ -1,9 +1,11 @@
 import { useRef } from 'react';
 import { IconButton } from '../ui/IconButton';
-import type { Item } from '../../types';
+import { ShopPill } from '../ui/ShopPill';
+import type { Item, Shop } from '../../types';
 
 interface ItemRowProps {
   item: Item;
+  shops: Shop[];
   isFirst: boolean;
   isLast: boolean;
   editing: boolean;
@@ -12,9 +14,10 @@ interface ItemRowProps {
   onCommitEdit(name: string): void;
   onMove(dir: 1 | -1): void;
   onDelete(): void;
+  onToggleShop(shopId: string): void;
 }
 
-export function ItemRow({ item, isFirst, isLast, editing, onStartEdit, onCancelEdit, onCommitEdit, onMove, onDelete }: ItemRowProps) {
+export function ItemRow({ item, shops, isFirst, isLast, editing, onStartEdit, onCancelEdit, onCommitEdit, onMove, onDelete, onToggleShop }: ItemRowProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   function commit() {
@@ -43,14 +46,29 @@ export function ItemRow({ item, isFirst, isLast, editing, onStartEdit, onCancelE
   }
 
   return (
-    <div className="flex items-center gap-2 bg-surface rounded-xl px-3.5 py-3 border-[1.5px] border-border">
-      <span className="flex-1 text-base font-semibold [overflow-wrap:anywhere] cursor-pointer" onClick={onStartEdit}>
-        {item.name}
-      </span>
-      <IconButton kind="move" onClick={onStartEdit}>✎</IconButton>
-      <IconButton kind="move" onClick={() => onMove(-1)} disabled={isFirst}>▲</IconButton>
-      <IconButton kind="move" onClick={() => onMove(1)} disabled={isLast}>▼</IconButton>
-      <IconButton kind="del" onClick={onDelete}>✕</IconButton>
+    <div className="flex flex-col gap-2 bg-surface rounded-xl px-3.5 py-3 border-[1.5px] border-border">
+      <div className="flex items-center gap-2">
+        <span className="flex-1 text-base font-semibold [overflow-wrap:anywhere] cursor-pointer" onClick={onStartEdit}>
+          {item.name}
+        </span>
+        <IconButton kind="move" onClick={onStartEdit}>✎</IconButton>
+        <IconButton kind="move" onClick={() => onMove(-1)} disabled={isFirst}>▲</IconButton>
+        <IconButton kind="move" onClick={() => onMove(1)} disabled={isLast}>▼</IconButton>
+        <IconButton kind="del" onClick={onDelete}>✕</IconButton>
+      </div>
+      {shops.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {shops.map(shop => (
+            <ShopPill
+              key={shop.id}
+              name={shop.name}
+              color={shop.color}
+              active={item.shopIds.includes(shop.id)}
+              onToggle={() => onToggleShop(shop.id)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

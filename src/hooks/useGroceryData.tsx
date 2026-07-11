@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { load, sanitize, slug, writeLocal } from '../lib/storage';
+import { colorAt, nextColor } from '../lib/shopColors';
 import type { GroceryData, Item, Shop } from '../types';
 
 interface GroceryContextValue {
@@ -8,8 +9,10 @@ interface GroceryContextValue {
   deleteItem(id: string): void;
   moveItem(i: number, dir: number): void;
   editItem(id: string, name: string): void;
+  toggleItemShop(itemId: string, shopId: string): void;
   addShop(name: string): void;
   deleteShop(id: string): void;
+  cycleShopColor(shopId: string): void;
   importData(raw: unknown): void;
   replaceData(d: GroceryData): void;
 }
@@ -27,7 +30,7 @@ export function GroceryProvider({ children }: { children: ReactNode }) {
 
   const addItem = useCallback((name: string) => {
     setData(prev => {
-      const next = { ...prev, items: [...prev.items, { id: slug(), name } as Item], updatedAt: Date.now() };
+      const next = { ...prev, items: [...prev.items, { id: slug(), name, shopIds: [] } as Item], updatedAt: Date.now() };
       writeLocal(next);
       return next;
     });
@@ -61,9 +64,25 @@ export function GroceryProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const toggleItemShop = useCallback((itemId: string, shopId: string) => {
+    setData(prev => {
+      const next = {
+        ...prev,
+        items: prev.items.map(it => {
+          if (it.id !== itemId) return it;
+          const has = it.shopIds.includes(shopId);
+          return { ...it, shopIds: has ? it.shopIds.filter(id => id !== shopId) : [...it.shopIds, shopId] };
+        }),
+        updatedAt: Date.now(),
+      };
+      writeLocal(next);
+      return next;
+    });
+  }, []);
+
   const addShop = useCallback((name: string) => {
     setData(prev => {
-      const next = { ...prev, shops: [...prev.shops, { id: slug(), name } as Shop], updatedAt: Date.now() };
+      const next = { ...prev, shops: [...prev.shops, { id: slug(), name, color: colorAt(prev.shops.length) } as Shop], updatedAt: Date.now() };
       writeLocal(next);
       return next;
     });
@@ -71,7 +90,24 @@ export function GroceryProvider({ children }: { children: ReactNode }) {
 
   const deleteShop = useCallback((id: string) => {
     setData(prev => {
-      const next = { ...prev, shops: prev.shops.filter(s => s.id !== id), updatedAt: Date.now() };
+      const next = {
+        ...prev,
+        shops: prev.shops.filter(s => s.id !== id),
+        items: prev.items.map(it => (it.shopIds.includes(id) ? { ...it, shopIds: it.shopIds.filter(sid => sid !== id) } : it)),
+        updatedAt: Date.now(),
+      };
+      writeLocal(next);
+      return next;
+    });
+  }, []);
+
+  const cycleShopColor = useCallback((shopId: string) => {
+    setData(prev => {
+      const next = {
+        ...prev,
+        shops: prev.shops.map(s => (s.id === shopId ? { ...s, color: nextColor(s.color) } : s)),
+        updatedAt: Date.now(),
+      };
       writeLocal(next);
       return next;
     });
@@ -88,8 +124,8 @@ export function GroceryProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<GroceryContextValue>(() => ({
-    data, addItem, deleteItem, moveItem, editItem, addShop, deleteShop, importData, replaceData,
-  }), [data, addItem, deleteItem, moveItem, editItem, addShop, deleteShop, importData, replaceData]);
+    data, addItem, deleteItem, moveItem, editItem, toggleItemShop, addShop, deleteShop, cycleShopColor, importData, replaceData,
+  }), [data, addItem, deleteItem, moveItem, editItem, toggleItemShop, addShop, deleteShop, cycleShopColor, importData, replaceData]);
 
   return <GroceryContext.Provider value={value}>{children}</GroceryContext.Provider>;
 }
