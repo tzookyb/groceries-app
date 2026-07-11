@@ -1,3 +1,5 @@
+import { SHELL_WIDTH } from '../lib/layout';
+
 export type TabId = 'list' | 'session' | 'settings';
 
 const TABS: { id: TabId; label: string }[] = [
@@ -8,7 +10,7 @@ const TABS: { id: TabId; label: string }[] = [
 
 export function TabBar({ active, onChange }: { active: TabId; onChange: (t: TabId) => void }) {
   return (
-    <div className="flex gap-1 bg-surface rounded-xl p-1 mt-6 w-[calc(100%-32px)] max-w-[640px] mx-auto">
+    <div className={`flex gap-1 bg-surface rounded-xl p-1 mt-6 ${SHELL_WIDTH}`}>
       {TABS.map(t => (
         <button
           key={t.id}

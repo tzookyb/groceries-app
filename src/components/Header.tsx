@@ -1,6 +1,8 @@
+import { SHELL_WIDTH } from '../lib/layout';
+
 export function Header() {
   return (
-    <header className="w-full px-6 pt-6 flex items-center gap-4 max-w-[640px] mx-auto">
+    <header className={`${SHELL_WIDTH} pt-6 flex items-center gap-4`}>
       <div
         className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center text-xl cursor-pointer"
         onClick={() => alert('גרסה ' + __APP_VERSION__)}

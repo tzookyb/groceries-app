@@ -6,10 +6,11 @@ import { GoogleAuthProvider } from './hooks/useGoogleAuth';
 import { MasterListTab } from './components/master/MasterListTab';
 import { SessionTab } from './components/session/SessionTab';
 import { SettingsTab } from './components/settings/SettingsTab';
+import { SHELL_WIDTH } from './lib/layout';
 
 function Panel({ active, children }: { active: boolean; children: ReactNode }) {
   return (
-    <div className={`w-[calc(100%-32px)] max-w-[640px] mx-auto mt-5 mb-10 flex-1 ${active ? 'flex flex-col gap-3' : 'hidden'}`}>
+    <div className={`${SHELL_WIDTH} mt-5 mb-10 flex-1 ${active ? 'flex flex-col gap-3' : 'hidden'}`}>
       {children}
     </div>
   );
