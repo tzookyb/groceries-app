@@ -427,7 +427,7 @@ const LEGACY_KEY = 'grocery-items';
 
 // APP_VERSION is auto-incremented on every push to main (see
 // .github/workflows/bump-version.yml). Tap the 🛒 logo to see it.
-const APP_VERSION = 14;
+const APP_VERSION = 15;
 
 const isMobileSession = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
@@ -441,15 +441,19 @@ function normalizeSpeechText(s) {
   return (s || '').replace(/[‎‏﻿]/g, '').normalize('NFC').trim();
 }
 
-// Normalize any loaded/imported blob into a clean v3: an array of {id,name}.
+// Normalize any loaded/imported blob into a clean v3: items[] + shops[], each {id,name}.
 // Tolerates v2 (drops store tags) and stray fields.
 function sanitize(d) {
   const items = Array.isArray(d && d.items) ? d.items : [];
+  const shops = Array.isArray(d && d.shops) ? d.shops : [];
   return {
     version: 3,
     items: items
       .filter(it => it && (it.name != null))
-      .map(it => ({ id: it.id || slug(), name: String(it.name) }))
+      .map(it => ({ id: it.id || slug(), name: String(it.name) })),
+    shops: shops
+      .filter(s => s && (s.name != null))
+      .map(s => ({ id: s.id || slug(), name: String(s.name) }))
   };
 }
 
@@ -474,7 +478,7 @@ function load() {
       }
     } catch (e) {}
   }
-  return { version: 3, items: [] };
+  return { version: 3, items: [], shops: [] };
 }
 
 function save() { localStorage.setItem(DATA_KEY, JSON.stringify(data)); }
@@ -561,7 +565,19 @@ function deleteItem(id) {
 // ═══════════════════════════════════════════════════════════
 function renderSettings() {
   const panel = document.getElementById('panel-settings');
+  const shopsRows = data.shops.map(s => `
+    <div class="item-row">
+      <span class="item-name">${esc(s.name)}</span>
+      <button class="btn-del" onclick="deleteShop('${s.id}')">✕</button>
+    </div>`).join('');
   panel.innerHTML = `
+    <div class="section-title">חנויות</div>
+    <div class="add-row">
+      <input type="text" id="newShop" placeholder="הוסף חנות..." onkeydown="if(event.key==='Enter')addShop()">
+      <button class="btn btn-accent" onclick="addShop()" style="white-space:nowrap">הוסף</button>
+    </div>
+    <div id="shopList">${shopsRows}</div>
+
     <div class="section-title">גיבוי</div>
     <div class="backup-box">
       <p>כל המידע נשמר מקומית בלבד. ייצא גיבוי לפני מחיקת נתונים או מעבר מכשיר.</p>
@@ -571,6 +587,20 @@ function renderSettings() {
         <input type="file" accept="application/json,.json" onchange="importBackup(this)" style="display:none">
       </label>
     </div>`;
+}
+
+function addShop() {
+  const inp = document.getElementById('newShop');
+  const val = inp.value.trim();
+  if (!val) return;
+  data.shops.push({ id: slug(), name: val });
+  save(); renderSettings();
+  document.getElementById('newShop').focus();
+}
+
+function deleteShop(id) {
+  data.shops = data.shops.filter(s => s.id !== id);
+  save(); renderSettings();
 }
 
 function exportBackup() {

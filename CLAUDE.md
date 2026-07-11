@@ -26,14 +26,15 @@ No build step, no dependencies, no framework.
 ```js
 {
   version: 3,
-  items:  [ { id, name } ]   // ARRAY ORDER = house order
+  items:  [ { id, name } ],  // ARRAY ORDER = house order
+  shops:  [ { id, name } ]   // user's shops (settings tab); display-only, no ordering semantics
 }
 ```
 - **House order** = the `items` array order (up/down reorder on the master list). It is the ONLY
   ordering — used by the session and by the Google Tasks export.
 - `id` = `slug()` = `Date.now().toString(36) + Math.random().toString(36).slice(2,6)` (no `crypto` dependency).
-- `sanitize(d)` runs on `load()` and on import: coerces any blob into a clean v3 (array of `{id,name}`,
-  minting missing ids). It also silently upgrades a **v2** blob by keeping `items[].name` and dropping the
+- `sanitize(d)` runs on `load()` and on import: coerces any blob into a clean v3 (`items[]` + `shops[]`,
+  each an array of `{id,name}`, minting missing ids). It also silently upgrades a **v2** blob by keeping `items[].name` and dropping the
   removed `stores` / `aisleOrder` fields.
 
 ### Migration
@@ -48,8 +49,8 @@ No build step, no dependencies, no framework.
   listen → answer כן / לא / number. Selected tracked as `{ itemId, qty }`; chips + tasks display
   `name ×N` (×1 omitted). Result screen lists selected items in house order and saves ONE Google Tasks
   list. Manual כן/לא + ×2–×5 buttons as fallback.
-- **Tab 3 — הגדרות (settings):** **backup** export (download full `grocery-data` JSON) + import
-  (validate → `sanitize` → replace).
+- **Tab 3 — הגדרות (settings):** **חנויות** — add shops via text input, remove each (display-only list,
+  no ordering); **backup** export (download full `grocery-data` JSON) + import (validate → `sanitize` → replace).
 - **Export:** all selected items → a single Google Tasks list, in house order.
 
 ## Speech-recognition contract (the top fragility area — treat as invariants)
