@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AddRow } from '../ui/AddRow';
 import { Button } from '../ui/Button';
 import { ItemList } from './ItemList';
@@ -32,11 +32,21 @@ export function MasterListTab() {
     setUnassignedOnly(prev => !prev);
   }
 
-  const filteredItems = data.items.filter(item => {
-    if (unassignedOnly) return item.shopIds.length === 0;
-    if (selectedShopIds.length > 0) return item.shopIds.some(id => selectedShopIds.includes(id));
-    return true;
-  });
+  // Snapshot which items match the filter only when the filter SELECTION changes,
+  // not on every item edit — so retagging an item mid-filter doesn't make it vanish.
+  const [frozenIds, setFrozenIds] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    if (!unassignedOnly && selectedShopIds.length === 0) {
+      setFrozenIds(null);
+      return;
+    }
+    const match = (item: (typeof data.items)[number]) =>
+      unassignedOnly ? item.shopIds.length === 0 : item.shopIds.some(id => selectedShopIds.includes(id));
+    setFrozenIds(new Set(data.items.filter(match).map(i => i.id)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedShopIds, unassignedOnly]);
+
+  const filteredItems = frozenIds ? data.items.filter(i => frozenIds.has(i.id)) : data.items;
 
   return (
     <>

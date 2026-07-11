@@ -12,6 +12,14 @@ export function isCancel(text: string): boolean {
   return CANCEL_WORDS.some(w => low === w || low.includes(w));
 }
 
+// Say one of these mid-session to step back to the previous item and revert its answer.
+export const CORRECTION_WORDS = ['תיקון', 'תקן', 'אחורה', 'חזור', 'תחזור', 'חזרה', 'back', 'undo'];
+
+export function isCorrection(text: string): boolean {
+  const low = text.toLowerCase().trim();
+  return CORRECTION_WORDS.some(w => low === w || low.includes(w));
+}
+
 export type ParsedAnswer =
   | { type: 'no' }
   | { type: 'qty'; qty: number }

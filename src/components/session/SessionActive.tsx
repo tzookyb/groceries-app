@@ -14,6 +14,7 @@ export function SessionActive({ session }: { session: ReturnType<typeof useSessi
       <SessionControls onAnswer={session.answer} />
       <QtyRow onAnswer={session.answer} />
       <SelectedChips items={session.selectedItems()} />
+      <Button variant="ghost" onClick={session.undo} className="w-full">↶ תיקון</Button>
       <Button variant="ghost" onClick={session.stop} className="w-full">סיים סשן</Button>
     </div>
   );

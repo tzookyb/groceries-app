@@ -10,6 +10,8 @@ interface GroceryContextValue {
   moveItem(i: number, dir: number): void;
   editItem(id: string, name: string): void;
   toggleItemShop(itemId: string, shopId: string): void;
+  assignItemToShops(itemId: string, shopIds: string[]): void;
+  unassignItemFromShops(itemId: string, shopIds: string[]): void;
   addShop(name: string): void;
   deleteShop(id: string): void;
   moveShop(i: number, dir: number): void;
@@ -81,6 +83,30 @@ export function GroceryProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const assignItemToShops = useCallback((itemId: string, shopIds: string[]) => {
+    setData(prev => {
+      const next = {
+        ...prev,
+        items: prev.items.map(it => (it.id === itemId ? { ...it, shopIds: [...new Set([...it.shopIds, ...shopIds])] } : it)),
+        updatedAt: Date.now(),
+      };
+      writeLocal(next);
+      return next;
+    });
+  }, []);
+
+  const unassignItemFromShops = useCallback((itemId: string, shopIds: string[]) => {
+    setData(prev => {
+      const next = {
+        ...prev,
+        items: prev.items.map(it => (it.id === itemId ? { ...it, shopIds: it.shopIds.filter(id => !shopIds.includes(id)) } : it)),
+        updatedAt: Date.now(),
+      };
+      writeLocal(next);
+      return next;
+    });
+  }, []);
+
   const addShop = useCallback((name: string) => {
     setData(prev => {
       const next = { ...prev, shops: [...prev.shops, { id: slug(), name, color: colorAt(prev.shops.length) } as Shop], updatedAt: Date.now() };
@@ -137,8 +163,8 @@ export function GroceryProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<GroceryContextValue>(() => ({
-    data, addItem, deleteItem, moveItem, editItem, toggleItemShop, addShop, deleteShop, moveShop, cycleShopColor, importData, replaceData,
-  }), [data, addItem, deleteItem, moveItem, editItem, toggleItemShop, addShop, deleteShop, moveShop, cycleShopColor, importData, replaceData]);
+    data, addItem, deleteItem, moveItem, editItem, toggleItemShop, assignItemToShops, unassignItemFromShops, addShop, deleteShop, moveShop, cycleShopColor, importData, replaceData,
+  }), [data, addItem, deleteItem, moveItem, editItem, toggleItemShop, assignItemToShops, unassignItemFromShops, addShop, deleteShop, moveShop, cycleShopColor, importData, replaceData]);
 
   return <GroceryContext.Provider value={value}>{children}</GroceryContext.Provider>;
 }

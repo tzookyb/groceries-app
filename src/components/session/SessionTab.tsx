@@ -6,8 +6,8 @@ import { SessionActive } from './SessionActive';
 import { ResultScreen } from './ResultScreen';
 
 export function SessionTab() {
-  const { data } = useGroceryData();
-  const session = useSession(data.items);
+  const { data, assignItemToShops, unassignItemFromShops } = useGroceryData();
+  const session = useSession(data.items, { assignItemToShops, unassignItemFromShops });
   const [selectedShopIds, setSelectedShopIds] = useState<string[]>([]);
 
   function toggleShop(id: string) {

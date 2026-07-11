@@ -67,23 +67,33 @@ only the code organization moved.
 - **v2 → v3 (stores removed):** an existing v2 blob loads through `sanitize()`, which preserves item
   names + house order and drops all store data. No user action needed.
 - **v3 → v4 (shop tagging added):** an existing v3 blob loads through `sanitize()`: items gain
-  `shopIds: []` (untagged) and shops gain a palette `color` by index. No user action, but a session
-  can't start until every item is tagged with a shop (the start-gate alert walks the user through it).
+  `shopIds: []` (untagged) and shops gain a palette `color` by index. No user action needed — an
+  untagged item is simply asked in every session until answered כן, which auto-tags it (see Feature map).
 
 ## Feature map
 - **Tab 1 — רשימת מלאי (master list):** items in house order; up/down reorder; delete; text-add + voice-add.
   Each row also shows one color-coded `ShopPill` per shop (`src/components/ui/ShopPill.tsx`); tapping
   toggles whether the item belongs to that shop (`toggleItemShop`, `src/hooks/useGroceryData.tsx`).
-  Pills row only renders when at least one shop exists.
+  Pills row only renders when at least one shop exists. When a shop/unassigned filter is active, row
+  **membership is frozen** at the moment the filter selection changes (`frozenIds` snapshot in
+  `MasterListTab.tsx`) — retagging a visible item's pills updates its pill colors live but does not
+  make the row disappear mid-edit; the snapshot re-computes only when the filter itself changes
+  (deletions still drop out, since the item id no longer exists in `data.items`).
 - **Tab 2 — סשן קניות (buy session):** the idle screen (`SessionIdle.tsx`) shows shop pills for
   multi-select — the start affordance is disabled until ≥1 shop is picked (`canStart`, state owned by
-  `SessionTab.tsx`). Starting is **blocked** with a Hebrew alert if any master item has no shop tagged
-  (`useSession.ts`'s `start(selectedShopIds)` gate) — every item must be tagged before a session can run.
-  The session then iterates only items belonging to ≥1 selected shop, in house order. Each item: speak →
-  listen → answer כן / לא / number. Selected tracked as `{ itemId, qty }`; chips + tasks display
-  `name ×N` (×1 omitted). Result screen groups selected items by shop and saves **one Google Tasks list
-  per selected shop** (shared items appear in every list they belong to). Manual כן/לא + ×2–×5 buttons
-  as fallback.
+  `SessionTab.tsx`). There is **no tagging gate** — a session includes every item belonging to ≥1
+  selected shop **plus every untagged item** (`useSession.ts`'s `start(selectedShopIds)` filter:
+  `it.shopIds.length === 0 || it.shopIds.some(...)`), so untagged items are asked in every session
+  instead of blocking it. Answering כן on an untagged item both selects it **and** auto-tags it to
+  the session's selected shops (`assignItemToShops`, `useGroceryData.tsx`); answering לא leaves it
+  untagged so it's asked again next time. Each item: speak → listen → answer כן / לא / number.
+  Selected tracked as `{ itemId, qty }`; chips + tasks display `name ×N` (×1 omitted). Saying
+  "תיקון" (or תקן/אחורה/חזור/back/undo — `isCorrection`, `src/lib/hebrew.ts`) or tapping the
+  **↶ תיקון** button steps back to the previous item, reverts its answer (pops it from `selected` if
+  it was כן, and un-tags it if that כן had auto-tagged it), and re-asks it — repeatable via a
+  per-answer history stack (`useSession.ts`'s `undo()`). Result screen groups selected items by shop
+  and saves **one Google Tasks list per selected shop** (shared items appear in every list they
+  belong to). Manual כן/לא + ×2–×5 buttons as fallback.
 - **Tab 3 — הגדרות (settings):** **חנויות** (`ShopsSection`) — add shops via text input (auto-assigned a
   palette color), tap a shop's color swatch to cycle it through the palette (`cycleShopColor`), remove
   each (also strips the shop from every item's `shopIds`, preventing orphans); **Google** (`GoogleSection`)
@@ -126,10 +136,13 @@ session via one factory `createSpeechEngine(onFinal)`:
   itself ends the recognition after long silence (`onend` → `scheduleStart`). (Earlier versions
   re-armed a fresh instance after every commit; that reintroduced the ~750ms dead gap and is gone.)
 - **`onStarted` callback** (2nd arg of `createSpeechEngine`): fires on the real `onstart` event.
-  Currently unused by session and voice-add (both pass no `onStarted`). The session's "your turn"
-  beep instead fires the instant TTS finishes (in `speakItem`'s `go()`), so feedback is immediate
-  rather than waiting for mic warmup; the mic `begin()`s right after (continuous mode keeps it open
-  on mobile so the short warmup no longer eats the beep-to-capture gap).
+  **Used by the session** (still unused by voice-add) to fire the "your turn" beep — `useSession.ts`
+  passes `createSpeechEngine(handleVoice, () => beep())`, and `speakItem`'s `go()` calls
+  `getEngine().begin()` immediately when TTS ends, with no beep and no pre-`begin()` delay. This fixes
+  a real bug: the beep used to fire the instant TTS ended, then `begin()` was delayed (`isMobileSession
+  ? 300 : 0`ms) and the engine itself waits `START_DELAY` (350ms mobile) before `r.start()` — so the
+  beep landed ~650ms before the mic was actually live, and an answer spoken right on the beep was
+  missed. Now the beep fires only once `onstart` confirms the mic is genuinely listening.
 - **Multi-word debounce (continuous mode only):** Android finalizes a multi-word phrase word-by-word,
   so committing on the first `isFinal` dropped later words. In continuous mode `onresult` takes the
   **longest** final transcript (Android re-emits a growing final at a NEW index — "רסק" then
@@ -146,9 +159,16 @@ session via one factory `createSpeechEngine(onFinal)`:
   Android's own session reset.
 - **Voice-add "cancel"** (`CANCEL_WORDS`: בטל/ביטול/מחק/טעות/cancel/undo…): pops the last captured
   pending item and beeps low (`beep(440)`) instead of adding. Voice-add only — not session.
+- **Session "correction"** (`CORRECTION_WORDS` in `src/lib/hebrew.ts`: תיקון/תקן/אחורה/חזור/back/undo
+  — a separate word list from `CANCEL_WORDS`, checked first in `handleVoice` via `isCorrection`):
+  triggers `useSession.ts`'s `undo()`, which steps back to the previous item, reverts its answer
+  (pop from `selected` if כן; `unassignItemFromShops` if that כן had auto-tagged an untagged item),
+  and re-asks it. Repeatable via a per-answer history stack (`sessionRef.current.history`); a manual
+  **↶ תיקון** button in `SessionActive.tsx` calls the same `undo()`. Beeps low (`beep(392)`) with no
+  effect if there's nothing to undo.
 - Beep on every accepted capture: `beep(1175)` for voice-add (`beep(440)` on cancel). Session beeps
-  on TTS end (the "your turn" cue), then again on each answer: `beep(1319)` high for yes/amount,
-  `beep(392)` low for no.
+  once the mic is confirmed live (via `onStarted`, the "your turn" cue — see above), then again on
+  each answer: `beep(1319)` high for yes/amount, `beep(392)` low for no.
 - Keep the 4s `speakItem` TTS fallback and the mobile start/restart delays (`START_DELAY`, `RESTART_DELAY`).
 
 ## Audio beep contract
@@ -259,11 +279,21 @@ Run `npm run dev` (or `npm run build && npm run preview`) and open in **Chrome**
   a beep per item. Say the same word twice deliberately → both captured. Say a **two-word** item (e.g.
   "רסק עגבניות") on mobile → captured whole, not just the first word. Say "בטל"/"cancel" → last item removed (low beep).
 - **Tagging:** on the master list, tap shop pills on an item → active/inactive toggles persist across reload.
+- **Filter freeze:** filter the master list to one shop, tap that shop's pill on a visible item to untag
+  it → row stays visible (pill goes inactive); tap another shop's pill on it → still visible. Change
+  the filter selection → membership re-snapshots to the new filter.
 - **Settings color:** tap a shop's color swatch → cycles palette; that shop's pills recolor everywhere.
-- **Start gate:** with ≥1 item untagged, open session, pick a shop, attempt start → blocked with a Hebrew
-  alert. Tag all items → start allowed; start stays disabled until ≥1 shop is picked.
-- **Session:** select a subset of shops, run through only items in those shops in house order, answer mix
-  of כן / לא / "שתיים" / a digit → chips show `name ×N`.
+- **Untagged items in session:** leave one item untagged; start a session for shop 1 + shop 2 → session
+  asks all shop-tagged items **and** the untagged one, no start-gate alert. Answer כן to it → after the
+  session the master list shows it tagged to shop 1 **and** shop 2. In a fresh session, answer לא to an
+  untagged item instead → it stays untagged and is asked again next time.
+- **Beep timing:** on a mobile UA, start a session and answer כן the instant the beep sounds → captured
+  (previously missed — the beep used to fire ~650ms before the mic was actually listening).
+- **Undo:** answer 3 items, say "תיקון" → returns to item 3 with its selection reverted; say it again →
+  steps back to item 2. If the undone item was an auto-tagged untagged item, its auto-added shop tags
+  are removed too. The ↶ תיקון button does the same; with nothing to undo it just beeps low.
+- **Session:** select a subset of shops, run through only items in those shops (plus any untagged) in
+  house order, answer mix of כן / לא / "שתיים" / a digit → chips show `name ×N`.
 - **Export:** tag a shared item to two shops, select both, finish a session → Google Tasks shows **two**
   lists named `SHOP — DD/MM`, the shared item in both, `×N` titles, house order preserved top→bottom.
 - **Import/export:** export JSON (Tab 3 הגדרות), clear localStorage, import → items + shopIds + shop
