@@ -427,7 +427,7 @@ const LEGACY_KEY = 'grocery-items';
 
 // APP_VERSION is auto-incremented on every push to main (see
 // .github/workflows/bump-version.yml). Tap the 🛒 logo to see it.
-const APP_VERSION = 15;
+const APP_VERSION = 16;
 
 const isMobileSession = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
@@ -448,6 +448,7 @@ function sanitize(d) {
   const shops = Array.isArray(d && d.shops) ? d.shops : [];
   return {
     version: 3,
+    updatedAt: Number(d && d.updatedAt) || 0,   // ms epoch; drives last-write-wins Drive sync
     items: items
       .filter(it => it && (it.name != null))
       .map(it => ({ id: it.id || slug(), name: String(it.name) })),
@@ -481,7 +482,11 @@ function load() {
   return { version: 3, items: [], shops: [] };
 }
 
-function save() { localStorage.setItem(DATA_KEY, JSON.stringify(data)); }
+function save() {
+  data.updatedAt = Date.now();
+  localStorage.setItem(DATA_KEY, JSON.stringify(data));
+  if (typeof scheduleDrivePush === 'function') scheduleDrivePush();
+}
 
 let data = load();
 
@@ -878,7 +883,7 @@ function switchTab(tab) {
 //  Google Auth (GIS + localStorage persistence) — unchanged contract
 // ═══════════════════════════════════════════════════════════
 const CLIENT_ID = '160959495941-tjn77c642badgo8bldlcmctur7s2knpm.apps.googleusercontent.com';
-const SCOPES = 'https://www.googleapis.com/auth/tasks';
+const SCOPES = 'https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/drive.appdata';
 const TOKEN_KEY = 'grocery-gtoken';
 let accessToken = null;
 let tokenClient = null;
@@ -887,7 +892,7 @@ function loadSavedToken() {
   try {
     const saved = JSON.parse(localStorage.getItem(TOKEN_KEY));
     if (saved && saved.token && saved.expiry > Date.now()) {
-      accessToken = saved.token; showAuthConnected(); return true;
+      accessToken = saved.token; showAuthConnected(); driveSync(); return true;
     }
   } catch (e) {}
   return false;
@@ -913,7 +918,7 @@ function connectGoogle() {
   if (!tokenClient) {
     tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID, scope: SCOPES,
-      callback: resp => { if (resp.error) return; accessToken = resp.access_token; saveToken(resp.access_token, resp.expires_in); showAuthConnected(); }
+      callback: resp => { if (resp.error) return; accessToken = resp.access_token; saveToken(resp.access_token, resp.expires_in); showAuthConnected(); driveSync(); }
     });
   }
   tokenClient.requestAccessToken({ prompt: accessToken ? '' : 'consent' });
@@ -930,6 +935,89 @@ function ensureToken(callback) {
     });
   }
   tokenClient.requestAccessToken({ prompt: '' });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Google Drive sync (appDataFolder) — one grocery-data.json blob.
+//  Cross-device backup using the SAME GIS token (drive.appdata scope).
+//  Last-write-wins by data.updatedAt. Never blocks the UI; all failures
+//  are swallowed — localStorage stays the source of truth.
+// ═══════════════════════════════════════════════════════════
+const DRIVE_FILE = 'grocery-data.json';
+let driveFileId = null;         // cached id of our blob (per session)
+let drivePushTimer = null;      // debounce handle
+let driveSyncing = false;       // reentrancy guard for the pull
+
+function driveAuth() { return { Authorization: 'Bearer ' + accessToken }; }
+
+async function driveFind() {
+  if (driveFileId) return driveFileId;
+  const url = 'https://www.googleapis.com/drive/v3/files'
+    + '?spaces=appDataFolder&fields=files(id,name)&q=' + encodeURIComponent("name='" + DRIVE_FILE + "'");
+  const res = await fetch(url, { headers: driveAuth() });
+  if (!res.ok) throw new Error('drive find ' + res.status);
+  const j = await res.json();
+  driveFileId = (j.files && j.files[0] && j.files[0].id) || null;
+  return driveFileId;
+}
+
+async function driveDownload() {
+  const id = await driveFind();
+  if (!id) return null;
+  const res = await fetch('https://www.googleapis.com/drive/v3/files/' + id + '?alt=media', { headers: driveAuth() });
+  if (!res.ok) throw new Error('drive download ' + res.status);
+  return res.json();
+}
+
+async function driveUpload() {
+  if (!accessToken) return;
+  const body = JSON.stringify(data);
+  const id = await driveFind();
+  if (id) {
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files/' + id + '?uploadType=media', {
+      method: 'PATCH', headers: { ...driveAuth(), 'Content-Type': 'application/json' }, body });
+    if (!res.ok) throw new Error('drive update ' + res.status);
+  } else {
+    // create in the hidden appDataFolder (multipart: metadata + media)
+    const boundary = 'gx' + Date.now().toString(36);
+    const meta = JSON.stringify({ name: DRIVE_FILE, parents: ['appDataFolder'] });
+    const multipart =
+      '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta + '\r\n' +
+      '--' + boundary + '\r\nContent-Type: application/json\r\n\r\n' + body + '\r\n' +
+      '--' + boundary + '--';
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+      method: 'POST', headers: { ...driveAuth(), 'Content-Type': 'multipart/related; boundary=' + boundary }, body: multipart });
+    if (!res.ok) throw new Error('drive create ' + res.status);
+    driveFileId = (await res.json()).id;
+  }
+}
+
+function scheduleDrivePush() {
+  if (!accessToken) return;                       // only sync when connected
+  clearTimeout(drivePushTimer);
+  drivePushTimer = setTimeout(() => { driveUpload().catch(() => {}); }, 1500);
+}
+
+// Pull remote on connect/startup. If remote is newer → replace local + re-render.
+// Otherwise (local newer, or no remote yet) → push local up.
+async function driveSync() {
+  if (!accessToken || driveSyncing) return;
+  driveSyncing = true;
+  try {
+    const remote = await driveDownload();
+    if (remote && Number(remote.updatedAt) > Number(data.updatedAt || 0)) {
+      data = sanitize(remote);
+      localStorage.setItem(DATA_KEY, JSON.stringify(data));   // NOT save() — don't re-stamp updatedAt
+      renderMaster();
+      renderSettings();
+    } else {
+      await driveUpload();
+    }
+  } catch (e) {
+    // silent: offline / transient / missing scope — local data untouched
+  } finally {
+    driveSyncing = false;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════

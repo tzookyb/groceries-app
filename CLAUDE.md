@@ -26,10 +26,13 @@ No build step, no dependencies, no framework.
 ```js
 {
   version: 3,
+  updatedAt: <ms epoch>,     // last local write; drives last-write-wins Drive sync (0 if never)
   items:  [ { id, name } ],  // ARRAY ORDER = house order
   shops:  [ { id, name } ]   // user's shops (settings tab); display-only, no ordering semantics
 }
 ```
+- `updatedAt` is stamped by `save()` on every write. `sanitize()` coerces it (`Number || 0`).
+  It is additive to v3 — old blobs without it load as `updatedAt: 0`, so the first synced device wins.
 - **House order** = the `items` array order (up/down reorder on the master list). It is the ONLY
   ordering — used by the session and by the Google Tasks export.
 - `id` = `slug()` = `Date.now().toString(36) + Math.random().toString(36).slice(2,6)` (no `crypto` dependency).
@@ -110,8 +113,22 @@ session via one factory `createSpeechEngine(onFinal)`:
 hang the flow. The shared `AudioContext` must be created/resumed inside a user gesture — `unlockAudio()`
 is called on the first tap of voice-add and session start.
 
+## Google Drive sync (cross-device persistence, no backend)
+- Optional sync layer on top of localStorage. `localStorage` stays the **source of truth**; Drive is
+  a mirror. All Drive failures are swallowed — the app works fully offline / disconnected.
+- Stores ONE file `grocery-data.json` in the hidden per-app **`appDataFolder`** (invisible to the user,
+  scoped to this app, in the user's own Drive). Uses the **same GIS token** as Google Tasks — no extra login.
+- Scope added: `https://www.googleapis.com/auth/drive.appdata` (alongside `tasks`). Existing users must
+  **reconnect once** (disconnect → connect) to grant the new scope; until then sync silently no-ops.
+- **Last-write-wins by `data.updatedAt`.** `driveSync()` runs on connect + on startup (valid saved token):
+  pulls remote, and if `remote.updatedAt > local.updatedAt` it replaces local + re-renders; otherwise pushes
+  local up. `save()` also fires a **debounced** push (`scheduleDrivePush`, 1.5s) on every write.
+- No conflict merge — a device that edits offline then syncs will overwrite/lose the other device's
+  concurrent edits (whichever `updatedAt` is larger wins wholesale). Acceptable for a single-user app.
+- SW already bypasses `googleapis.com`, so Drive calls are never cached.
+
 ## Google Tasks
-- `CLIENT_ID` = the OAuth web client id (in `index.html`); scope = `https://www.googleapis.com/auth/tasks`.
+- `CLIENT_ID` = the OAuth web client id (in `index.html`); scope = `tasks` + `drive.appdata` (see Drive sync).
 - Auth via **GIS token client** (`google.accounts.oauth2.initTokenClient`); token persisted in
   `localStorage['grocery-gtoken']` with expiry; `ensureToken(cb)` re-auths silently when expired.
 - Export creates ONE list per trip titled **`קניות — DD/MM`**, tasks titled `name ×N` (×1 omitted),
