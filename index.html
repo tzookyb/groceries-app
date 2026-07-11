@@ -355,16 +355,6 @@
         לכל מוצר ענה <strong>כן</strong> / <strong>לא</strong> / <strong>מספר</strong> (כמות).
       </div>
     </div>
-
-    <!-- Google Tasks auth -->
-    <div class="auth-section">
-      <p>כדי לשמור לרשימת Google Tasks, יש להתחבר עם Google:</p>
-      <button class="btn-google" id="connectBtn" onclick="connectGoogle()">
-        <svg class="google-icon" viewBox="0 0 48 48"><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="#FBBC05" d="M10.53 28.59c-.5-1.45-.79-3-.79-4.59s.29-3.14.79-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/></svg>
-        התחבר עם Google
-      </button>
-      <div class="status-msg" id="authStatus"></div>
-    </div>
   </div>
 
   <!-- Active session -->
@@ -427,7 +417,7 @@ const LEGACY_KEY = 'grocery-items';
 
 // APP_VERSION is auto-incremented on every push to main (see
 // .github/workflows/bump-version.yml). Tap the 🛒 logo to see it.
-const APP_VERSION = 16;
+const APP_VERSION = 17;
 
 const isMobileSession = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
@@ -582,6 +572,19 @@ function renderSettings() {
       <button class="btn btn-accent" onclick="addShop()" style="white-space:nowrap">הוסף</button>
     </div>
     <div id="shopList">${shopsRows}</div>
+
+    <div class="section-title">Google</div>
+    <div class="auth-section">
+      <p>התחבר כדי לשמור רשימות ל-Google Tasks ולסנכרן את הנתונים בין המכשירים שלך.</p>
+      ${isGoogleConnected()
+        ? `<button class="btn" id="connectBtn" onclick="disconnectGoogle()" style="background:#374151;color:#9ca3af;width:100%">התנתק</button>
+           <div class="status-msg ok" id="authStatus">✓ מחובר ל-Google</div>`
+        : `<button class="btn-google" id="connectBtn" onclick="connectGoogle()">
+             <svg class="google-icon" viewBox="0 0 48 48"><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="#FBBC05" d="M10.53 28.59c-.5-1.45-.79-3-.79-4.59s.29-3.14.79-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/></svg>
+             התחבר עם Google
+           </button>
+           <div class="status-msg" id="authStatus"></div>`}
+    </div>
 
     <div class="section-title">גיבוי</div>
     <div class="backup-box">
@@ -901,19 +904,15 @@ function saveToken(token, expiresIn) {
   localStorage.setItem(TOKEN_KEY, JSON.stringify({ token, expiry: Date.now() + (expiresIn - 60) * 1000 }));
 }
 function clearToken() { localStorage.removeItem(TOKEN_KEY); accessToken = null; }
+function isGoogleConnected() {
+  try { const s = JSON.parse(localStorage.getItem(TOKEN_KEY)); return !!(s && s.token && s.expiry > Date.now()); }
+  catch (e) { return false; }
+}
 
-function showAuthConnected() {
-  const el = document.getElementById('authStatus');
-  if (el) { el.textContent = '✓ מחובר ל-Google'; el.className = 'status-msg ok'; }
-  const btn = document.getElementById('connectBtn');
-  if (btn) { btn.textContent = 'התנתק'; btn.onclick = disconnectGoogle; btn.style.background = '#374151'; btn.style.color = '#9ca3af'; }
-}
-function disconnectGoogle() {
-  clearToken();
-  const btn = document.getElementById('connectBtn');
-  if (btn) { btn.textContent = 'התחבר עם Google'; btn.onclick = connectGoogle; btn.style.background = '#fff'; btn.style.color = '#333'; }
-  document.getElementById('authStatus').textContent = '';
-}
+// The connect / status UI lives in the settings panel (renderSettings), which
+// derives its state from isGoogleConnected() — so both just re-render it.
+function showAuthConnected() { renderSettings(); }
+function disconnectGoogle() { clearToken(); renderSettings(); }
 function connectGoogle() {
   if (!tokenClient) {
     tokenClient = google.accounts.oauth2.initTokenClient({
@@ -1005,7 +1004,12 @@ async function driveSync() {
   driveSyncing = true;
   try {
     const remote = await driveDownload();
-    if (remote && Number(remote.updatedAt) > Number(data.updatedAt || 0)) {
+    const localEmpty  = data.items.length === 0 && data.shops.length === 0;
+    const remoteHasData = !!(remote && ((remote.items && remote.items.length) || (remote.shops && remote.shops.length)));
+    const remoteNewer = !!(remote && Number(remote.updatedAt) > Number(data.updatedAt || 0));
+    // Take remote when it's newer, OR when local is empty (e.g. a cleared / fresh
+    // device) and remote actually has data — so an empty device never clobbers a good remote.
+    if (remote && (remoteNewer || (localEmpty && remoteHasData))) {
       data = sanitize(remote);
       localStorage.setItem(DATA_KEY, JSON.stringify(data));   // NOT save() — don't re-stamp updatedAt
       renderMaster();

@@ -53,7 +53,10 @@ No build step, no dependencies, no framework.
   `name ×N` (×1 omitted). Result screen lists selected items in house order and saves ONE Google Tasks
   list. Manual כן/לא + ×2–×5 buttons as fallback.
 - **Tab 3 — הגדרות (settings):** **חנויות** — add shops via text input, remove each (display-only list,
-  no ordering); **backup** export (download full `grocery-data` JSON) + import (validate → `sanitize` → replace).
+  no ordering); **Google** — connect / disconnect (drives both Tasks export and Drive sync; state derived
+  from `isGoogleConnected()`, rendered inside `renderSettings`); **backup** export (download full
+  `grocery-data` JSON) + import (validate → `sanitize` → replace). The connect button used to live on the
+  session idle screen — it moved here; the session's export button (`saveToTasks`) still auths on demand.
 - **Export:** all selected items → a single Google Tasks list, in house order.
 
 ## Speech-recognition contract (the top fragility area — treat as invariants)
@@ -121,10 +124,15 @@ is called on the first tap of voice-add and session start.
 - Scope added: `https://www.googleapis.com/auth/drive.appdata` (alongside `tasks`). Existing users must
   **reconnect once** (disconnect → connect) to grant the new scope; until then sync silently no-ops.
 - **Last-write-wins by `data.updatedAt`.** `driveSync()` runs on connect + on startup (valid saved token):
-  pulls remote, and if `remote.updatedAt > local.updatedAt` it replaces local + re-renders; otherwise pushes
-  local up. `save()` also fires a **debounced** push (`scheduleDrivePush`, 1.5s) on every write.
-- No conflict merge — a device that edits offline then syncs will overwrite/lose the other device's
-  concurrent edits (whichever `updatedAt` is larger wins wholesale). Acceptable for a single-user app.
+  it pulls remote and takes it when **either** `remote.updatedAt > local.updatedAt` **OR** local is empty
+  (no items + no shops) and remote has data — the second clause stops a **cleared/fresh device from
+  clobbering a good remote** (both would tie at `updatedAt` 0). Otherwise it pushes local up. `save()`
+  also fires a **debounced** push (`scheduleDrivePush`, 1.5s) on every write.
+- Data that predates the Drive feature was never on Drive — connecting an empty device can't restore it.
+  Restore from the **JSON backup import** instead: `importBackup` → `save()` stamps a fresh `updatedAt`
+  → push uploads real data to Drive; other devices then pull it.
+- No field-level merge — a device that edits offline then syncs overwrites the other device's concurrent
+  edits wholesale (larger `updatedAt` wins). Acceptable for a single-user app.
 - SW already bypasses `googleapis.com`, so Drive calls are never cached.
 
 ## Google Tasks
