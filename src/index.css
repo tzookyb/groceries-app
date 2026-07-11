@@ -1,0 +1,55 @@
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;800&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Heebo', sans-serif;
+  --color-bg: #0f1117;
+  --color-surface: #1a1d27;
+  --color-surface2: #222535;
+  --color-accent: #4ade80;
+  --color-accent-dim: rgba(74, 222, 128, 0.12);
+  --color-red: #f87171;
+  --color-red-dim: rgba(248, 113, 113, 0.12);
+  --color-text: #e8eaf0;
+  --color-muted: #6b7280;
+  --color-border: #2d3145;
+  --radius-app: 16px;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Heebo', sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+input[type='text'] {
+  direction: rtl;
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}

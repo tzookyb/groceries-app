@@ -1,7 +1,8 @@
 #!/bin/sh
-# Auto-increment the integer APP_VERSION (and keep sw.js's CACHE name in sync)
-# on every commit to main, so the deployed PWA always shows a higher number than
-# the last one — tap the 🛒 logo to see it.
+# Auto-bump package.json's version on every commit to main, so the deployed
+# PWA always shows a higher version — tap the 🛒 logo to see it.
+# vite-plugin-pwa handles service-worker cache busting via content hashing,
+# so there's no CACHE constant to keep in sync anymore.
 #
 # Installed via a tracked hooks dir. Activate once per clone with:
 #   git config core.hooksPath .githooks
@@ -9,13 +10,13 @@
 branch=$(git symbolic-ref --short HEAD 2>/dev/null)
 [ "$branch" = "main" ] || exit 0
 
-cur=$(grep -oE 'const APP_VERSION = [0-9]+' index.html | grep -oE '[0-9]+$')
+cur=$(grep -oE '"version": "[0-9]+\.[0-9]+\.[0-9]+"' package.json | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
 [ -n "$cur" ] || exit 0
-next=$((cur + 1))
+major=$(echo "$cur" | cut -d. -f1)
+next=$((major + 1))
 
 # macOS/BSD sed (this repo is developed on darwin).
-sed -i '' "s/const APP_VERSION = ${cur};/const APP_VERSION = ${next};/" index.html
-sed -i '' "s/const CACHE = 'grocery-v[0-9]*';/const CACHE = 'grocery-v${next}';/" sw.js
+sed -i '' "s/\"version\": \"${cur}\"/\"version\": \"${next}.0.0\"/" package.json
 
-git add index.html sw.js
-echo "pre-commit: bumped APP_VERSION ${cur} -> ${next} (CACHE grocery-v${next})"
+git add package.json
+echo "pre-commit: bumped package.json version ${cur} -> ${next}.0.0"
