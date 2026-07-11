@@ -134,6 +134,10 @@ is called on the first tap of voice-add and session start.
 - No field-level merge — a device that edits offline then syncs overwrites the other device's concurrent
   edits wholesale (larger `updatedAt` wins). Acceptable for a single-user app.
 - SW already bypasses `googleapis.com`, so Drive calls are never cached.
+- **Not silent anymore:** every sync sets a visible status in settings via `setDriveStatus` (`#driveStatus`),
+  and HTTP errors carry the status code + response-body slice (`driveErr`) — a 403 (missing scope) is
+  shown, not swallowed. A **סנכרן עכשיו** button (`syncNow`) clears the cached `driveFileId` and re-runs
+  `driveSync` for on-demand diagnosis/repair.
 
 ## Google Tasks
 - `CLIENT_ID` = the OAuth web client id (in `index.html`); scope = `tasks` + `drive.appdata` (see Drive sync).
