@@ -31,6 +31,10 @@ html, body {
   padding: 0;
 }
 
+#root {
+  width: 100%;
+}
+
 body {
   font-family: 'Heebo', sans-serif;
   background: var(--color-bg);
