@@ -189,6 +189,24 @@ session start (`useSession.start`).
   every build produces a different hash, so the SW updates automatically. There is no manual
   `CACHE` constant to keep in sync anymore.
 
+## Security & secrets (hard constraint)
+- **Never commit secrets**: no client secrets, private keys, service-account JSON, API keys meant
+  to stay server-side, or real user tokens (`grocery-gtoken` values) — the *key name* is fine, a
+  real value is not.
+- The Google **`CLIENT_ID`** in `src/services/googleAuth.ts` is intentionally public (GIS
+  token-client flow for a no-backend SPA) — it is not a secret and does not need to move to an env
+  var. Do not treat it as a finding.
+- This app has no backend and no `.env` — if a future change ever introduces one, it must be
+  gitignored immediately and never committed, even temporarily.
+- Before any commit, scan the diff for secret-shaped strings (`-----BEGIN...KEY-----`, `AIza...`,
+  `client_secret`, `ghp_`, `sk-...`, hardcoded passwords) — if found, stop and remove before
+  committing, don't just note it for later.
+- Real Google OAuth tokens live **only** in each user's own `localStorage`
+  (`grocery-gtoken`) or in Drive's `appDataFolder` — never write a live token into a file that
+  gets committed, a log, a test fixture, or a debug alert/console statement.
+- Any new external API integration must confirm client-side exposure is safe for that provider's
+  auth model (public client vs. confidential client) before adding the key/ID to source.
+
 ## Self-update rule
 Any agent that changes the **data model**, a **feature**, the **speech contract**, or the
 **build/architecture** **must update this CLAUDE.md in the same change** and note what moved.
