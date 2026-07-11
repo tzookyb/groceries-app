@@ -150,7 +150,17 @@
     border: 1.5px solid var(--border);
   }
 
-  .item-name { flex: 1; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+  .item-name { flex: 1; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; cursor: pointer; }
+
+  .item-edit {
+    flex: 1; min-width: 0;
+    font-size: 16px; font-weight: 600;
+    background: var(--bg);
+    border: 1.5px solid var(--accent, var(--text));
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+  }
 
   .move-btn, .btn-del {
     width: 44px; height: 44px;
@@ -417,7 +427,7 @@ const LEGACY_KEY = 'grocery-items';
 
 // APP_VERSION is auto-incremented on every push to main (see
 // .github/workflows/bump-version.yml). Tap the 🛒 logo to see it.
-const APP_VERSION = 12;
+const APP_VERSION = 13;
 
 const isMobileSession = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
@@ -483,13 +493,45 @@ function renderMaster() {
   data.items.forEach((item, i) => {
     const row = document.createElement('div');
     row.className = 'item-row';
-    row.innerHTML = `
-      <span class="item-name">${esc(item.name)}</span>
-      <button class="move-btn" onclick="moveItem(${i},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
-      <button class="move-btn" onclick="moveItem(${i},1)" ${i === data.items.length - 1 ? 'disabled' : ''}>▼</button>
-      <button class="btn-del" onclick="deleteItem('${item.id}')">✕</button>`;
-    list.appendChild(row);
+    if (editingId === item.id) {
+      row.innerHTML = `
+        <input class="item-edit" value="${esc(item.name)}" />
+        <button class="move-btn" onclick="commitEdit('${item.id}')">✓</button>
+        <button class="btn-del" onclick="cancelEdit()">✕</button>`;
+      list.appendChild(row);
+      const inp = row.querySelector('.item-edit');
+      inp.focus();
+      inp.setSelectionRange(inp.value.length, inp.value.length);
+      inp.addEventListener('keydown', e => {
+        if (e.key === 'Enter') commitEdit(item.id);
+        else if (e.key === 'Escape') cancelEdit();
+      });
+    } else {
+      row.innerHTML = `
+        <span class="item-name" onclick="startEdit('${item.id}')">${esc(item.name)}</span>
+        <button class="move-btn" onclick="startEdit('${item.id}')">✎</button>
+        <button class="move-btn" onclick="moveItem(${i},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
+        <button class="move-btn" onclick="moveItem(${i},1)" ${i === data.items.length - 1 ? 'disabled' : ''}>▼</button>
+        <button class="btn-del" onclick="deleteItem('${item.id}')">✕</button>`;
+      list.appendChild(row);
+    }
   });
+}
+
+let editingId = null;
+
+function startEdit(id) { editingId = id; renderMaster(); }
+function cancelEdit() { editingId = null; renderMaster(); }
+
+function commitEdit(id) {
+  const row = [...document.querySelectorAll('.item-row')].find(r => r.querySelector('.item-edit'));
+  const val = row && row.querySelector('.item-edit').value.trim();
+  if (val) {
+    const item = data.items.find(it => it.id === id);
+    if (item) { item.name = val; save(); }
+  }
+  editingId = null;
+  renderMaster();
 }
 
 function moveItem(i, dir) {
