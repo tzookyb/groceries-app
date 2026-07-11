@@ -184,6 +184,13 @@ session start (`useSession.start`).
   by `useDriveSync` and rendered in `GoogleSection`, and HTTP errors carry the status code +
   response-body slice (`driveErr`) — a 403 (missing scope) is shown, not swallowed. A **סנכרן עכשיו**
   button (`syncNow`) clears the cached `driveFileId` and re-runs `driveSync` for on-demand diagnosis/repair.
+- **Backgrounding-safe push:** the debounced push (`scheduleDrivePush`, 1.5s) is flushed immediately
+  (`flushDrivePush`, googleDrive.ts) on `visibilitychange`→hidden or `pagehide` (registered in
+  `useDriveSync` while connected), so a pill tagged right before backgrounding/closing the mobile PWA
+  still uploads instead of being dropped by the unfired timer.
+- **Token-refreshing push:** every push (`doPush`) wraps the upload in `ensureToken` (silent,
+  no-popup refresh) before calling `driveUpload`, so a push made after the ~1hr token expiry
+  re-authenticates instead of silently failing with a 401.
 
 ## Google Tasks
 - Lives in `src/services/googleAuth.ts` + `src/services/googleTasks.ts`. `CLIENT_ID` = the OAuth web

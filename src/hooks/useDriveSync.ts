@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { driveSync, onDriveStatus, scheduleDrivePush, syncNow as driveSyncNow, type DriveStatusKind } from '../services/googleDrive';
+import { driveSync, onDriveStatus, scheduleDrivePush, flushDrivePush, syncNow as driveSyncNow, type DriveStatusKind } from '../services/googleDrive';
 import { useGroceryData } from './useGroceryData';
 import type { GroceryData } from '../types';
 
@@ -33,6 +33,19 @@ export function useDriveSync(connected: boolean) {
     if (skipPushRef.current) { skipPushRef.current = false; return; }
     scheduleDrivePush(getData);
   }, [data.updatedAt, connected]);
+
+  // Flush a pending debounced push when the app is backgrounded/closed, so a
+  // quick tag-then-close mobile flow doesn't drop the upload.
+  useEffect(() => {
+    if (!connected) return;
+    const onVisibility = () => { if (document.visibilityState === 'hidden') flushDrivePush(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', flushDrivePush);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', flushDrivePush);
+    };
+  }, [connected]);
 
   const syncNow = () => driveSyncNow(getData, applyRemote);
 

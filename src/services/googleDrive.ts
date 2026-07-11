@@ -2,7 +2,7 @@
 // Cross-device backup using the SAME GIS token (drive.appdata scope).
 // Last-write-wins by data.updatedAt. Never blocks the UI; all failures
 // are swallowed — localStorage stays the source of truth.
-import { getAccessToken } from './googleAuth';
+import { getAccessToken, ensureToken } from './googleAuth';
 import { sanitize, writeLocal } from '../lib/storage';
 import type { GroceryData } from '../types';
 
@@ -10,6 +10,7 @@ const DRIVE_FILE = 'grocery-data.json';
 
 let driveFileId: string | null = null; // cached id of our blob (per session)
 let drivePushTimer: ReturnType<typeof setTimeout> | null = null; // debounce handle
+let pendingGetData: (() => GroceryData) | null = null; // data getter for the pending push, if any
 let driveSyncing = false; // reentrancy guard for the pull
 
 export type DriveStatusKind = '' | 'ok' | 'err';
@@ -77,15 +78,37 @@ async function driveUpload(data: GroceryData): Promise<void> {
   }
 }
 
+// Refresh the token (silently, no popup, if expired) before uploading — so a
+// push made after the ~1hr token expiry doesn't silently 401.
+function doPush(getData: () => GroceryData): void {
+  setDriveStatus('מעלה ל-Drive…', '');
+  ensureToken(() =>
+    driveUpload(getData())
+      .then(() => setDriveStatus('✓ נשמר ב-Drive', 'ok'))
+      .catch(e => setDriveStatus('שגיאת סנכרון: ' + e.message, 'err'))
+  );
+}
+
 export function scheduleDrivePush(getData: () => GroceryData): void {
   if (!getAccessToken()) return; // only sync when connected
   if (drivePushTimer) clearTimeout(drivePushTimer);
+  pendingGetData = getData;
   drivePushTimer = setTimeout(() => {
-    setDriveStatus('מעלה ל-Drive…', '');
-    driveUpload(getData())
-      .then(() => setDriveStatus('✓ נשמר ב-Drive', 'ok'))
-      .catch(e => setDriveStatus('שגיאת סנכרון: ' + e.message, 'err'));
+    drivePushTimer = null;
+    pendingGetData = null;
+    doPush(getData);
   }, 1500);
+}
+
+// Flush a pending debounced push immediately — call when the app is about to
+// be backgrounded/closed so a quick edit-then-close doesn't drop the upload.
+export function flushDrivePush(): void {
+  if (!drivePushTimer || !pendingGetData) return;
+  clearTimeout(drivePushTimer);
+  drivePushTimer = null;
+  const getData = pendingGetData;
+  pendingGetData = null;
+  doPush(getData);
 }
 
 // Pull remote on connect/startup. If remote is newer (or local is empty and
